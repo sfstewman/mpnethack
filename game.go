@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
 )
 
 const (
-	GameRefreshInterval time.Duration = 33 * time.Millisecond
+	GameRefreshInterval time.Duration = 100 * time.Millisecond
 )
 
 // Game message levels
@@ -53,6 +54,11 @@ func (g *Game) loopInner() {
 
 	// game loop calculation
 	g.FrameNum++
+
+	if g.FrameNum%64 == 0 {
+		log.Printf("frame %d", g.FrameNum)
+		g.messagef(MsgInfo, "frame %d", g.FrameNum)
+	}
 }
 
 func (g *Game) sendUpdate() {
@@ -88,10 +94,20 @@ GameLoop:
 	}
 }
 
+func (g *Game) Messagef(l MsgLevel, fmtStr string, args ...interface{}) error {
+	s := fmt.Sprintf(fmtStr, args...)
+	return g.Message(l, s)
+}
+
 func (g *Game) Message(l MsgLevel, s string) error {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
+	return g.message(l, s)
+}
+
+func (g *Game) messagef(l MsgLevel, fmtStr string, args ...interface{}) error {
+	s := fmt.Sprintf(fmtStr, args...)
 	return g.message(l, s)
 }
 
