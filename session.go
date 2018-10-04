@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -31,9 +32,16 @@ const (
 type Session struct {
 	Screen *IOScreen
 	App    *tview.Application
-	Game   *Game
+	G      *Game
+	GV     *GameView
 	State  SessionState
 	Flags  SessionFlag
+}
+
+func (s *Session) Message(l MsgLevel, msg string) error {
+	err := s.GV.Message(l, msg)
+	s.Update()
+	return err
 }
 
 func (s *Session) Resize(w, h uint32) {
@@ -54,8 +62,18 @@ func (s *Session) Update() error {
 func (s *Session) Run() error {
 	s.App = tview.NewApplication()
 	s.App.SetScreen(s.Screen)
-	box := tview.NewBox().SetBorder(true).SetTitle("Hello, world!")
-	s.App.SetRoot(box, true)
+
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+
+	s.G = NewGame([]*Session{s}, ctx)
+	s.GV = NewGameView(s.G)
+
+	go s.G.Loop()
+
+	s.App.SetRoot(s.GV, true)
+	// box := tview.NewBox().SetBorder(true).SetTitle("Hello, world!")
+	// s.App.SetRoot(box, true)
 
 	/*
 		if err := s.Screen.Init(); err != nil {
