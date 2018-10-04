@@ -55,8 +55,13 @@ type EventUpdate struct {
 }
 
 func (s *Session) Update() error {
-	upd := &EventUpdate{}
-	return s.Screen.PostEvent(upd)
+	s.App.Draw()
+	return nil
+
+	/*
+		upd := &EventUpdate{}
+		return s.Screen.PostEvent(upd)
+	*/
 }
 
 func (s *Session) Run() error {
