@@ -678,7 +678,7 @@ func (t *IOScreen) draw() {
 		t.clearScreen()
 	}
 
-	fmt.Printf("w = %d, h = %d\n", t.w, t.h)
+	// fmt.Printf("w = %d, h = %d\n", t.w, t.h)
 	for y := 0; y < t.h; y++ {
 		for x := 0; x < t.w; x++ {
 			width := t.drawCell(x, y)
