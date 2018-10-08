@@ -64,6 +64,30 @@ func (s *Session) Update() error {
 	*/
 }
 
+func (s *Session) Move(direc uint16) {
+	s.G.UserAction(s, Move, direc)
+}
+
+func (s *Session) Attack() {
+	s.G.UserAction(s, Attack, 0)
+}
+
+func (s *Session) Defend() {
+	s.G.UserAction(s, Defend, 0)
+}
+
+func (s *Session) ConsoleInput(txt string) {
+	switch {
+	case txt == "":
+		/* nop */
+
+	case txt[0] == '/':
+		s.G.Command(s, txt)
+	default:
+		s.G.Input(MsgChat, s, txt)
+	}
+}
+
 func (s *Session) Run() error {
 	s.App = tview.NewApplication()
 	s.App.SetScreen(s.Screen)
@@ -72,7 +96,7 @@ func (s *Session) Run() error {
 	defer cancel()
 
 	s.G = NewGame([]*Session{s}, ctx)
-	s.GV = NewGameView(s.G)
+	s.GV = NewGameView(s)
 
 	go s.G.Loop()
 

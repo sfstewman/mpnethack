@@ -24,7 +24,7 @@ const (
 type GameInput struct {
 	mu sync.Mutex
 	*tview.InputField
-	G    *Game
+	Sess *Session
 	Mode InputMode
 }
 
@@ -37,9 +37,40 @@ func (inp *GameInput) onKey(ev *tcell.EventKey) *tcell.EventKey {
 	}
 
 	k := ev.Key()
-	if k == tcell.KeyRune && ev.Rune() == '/' {
-		inp.Mode = InputChat
-		return nil
+	s := inp.Sess
+
+	switch k {
+	case tcell.KeyRune:
+		r := ev.Rune()
+		switch r {
+		case '`':
+			inp.Mode = InputChat
+
+		case 'a':
+			s.Move(MoveLeft)
+		case 'd':
+			s.Move(MoveRight)
+		case 'w':
+			s.Move(MoveUp)
+		case 's':
+			s.Move(MoveDown)
+
+		case ' ':
+			s.Attack()
+		case 'v':
+			s.Defend()
+
+		case '1', '2', '3', '4':
+		}
+
+	case tcell.KeyLeft:
+		s.Move(MoveLeft)
+	case tcell.KeyRight:
+		s.Move(MoveRight)
+	case tcell.KeyUp:
+		s.Move(MoveUp)
+	case tcell.KeyDown:
+		s.Move(MoveDown)
 	}
 
 	return nil
@@ -52,21 +83,24 @@ func (inp *GameInput) onDone(key tcell.Key) {
 	switch key {
 	case tcell.KeyEnter:
 		// XXX: handle message
-		msg := inp.GetText()
-		log.Printf("[chat] %s", msg)
-		inp.SetText("")
-		inp.G.Message(MsgChat, msg)
-		inp.Mode = InputDirect
+		txt := inp.GetText()
+		if txt != "" {
+			log.Printf("[console] %s", txt)
+			inp.SetText("")
+			inp.Sess.ConsoleInput(txt)
+			inp.Mode = InputDirect
+		}
 
 	case tcell.KeyEsc:
 		inp.Mode = InputDirect
 	}
 }
 
-func NewGameInput(g *Game) *GameInput {
+func NewGameInput(sess *Session) *GameInput {
 	inp := &GameInput{
 		InputField: tview.NewInputField(),
-		G:          g,
+
+		Sess: sess,
 	}
 
 	inp.SetInputCapture(inp.onKey)
@@ -91,15 +125,15 @@ type GameView struct {
 	Input   *GameInput
 }
 
-func NewGameView(g *Game) *GameView {
+func NewGameView(s *Session) *GameView {
 	gv := &GameView{
 		Pages:   tview.NewPages(),
-		G:       g,
+		G:       s.G,
 		Popup:   tview.NewModal(),
 		W:       tview.NewTextView(),
 		Status:  tview.NewTextView(),
 		ChatLog: tview.NewTextView(),
-		Input:   NewGameInput(g),
+		Input:   NewGameInput(s),
 	}
 
 	// Configure base UI layout
