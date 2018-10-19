@@ -117,13 +117,15 @@ type StatusView struct {
 	// P *Player
 	S *Session
 	G *Game
+
+	cooldowns Cooldowns
 }
 
 func NewStatusView(s *Session) *StatusView {
 	sv := &StatusView{
-		tview.NewBox(),
-		s,
-		s.G,
+		Box: tview.NewBox(),
+		S:   s,
+		G:   s.G,
 	}
 
 	sv.SetDrawFunc(sv.DrawFunc)
@@ -137,7 +139,10 @@ func (sv *StatusView) DrawFunc(screen tcell.Screen, x, y, width, height int) (in
 	// draw char stats
 
 	// draw actions and cooldowns
-	cds := sv.G.GetCooldowns(sv.S)
+	sv.cooldowns = sv.G.GetCooldowns(sv.S, sv.cooldowns)
+	cds := sv.cooldowns
+
+	// fmt.Printf("cooldowns = %v\n", cds)
 
 	dy := 0
 	for actInd, nticks := range cds {

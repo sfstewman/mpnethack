@@ -73,8 +73,13 @@ var UserActionCooldownTicks = [MaxActionType]uint64{
 
 type Cooldowns []uint32
 
-func calcCooldowns(now uint64, last []uint64) Cooldowns {
-	cd := make(Cooldowns, len(last))
+var zeroCooldowns = [MaxActionType]uint32{}
+
+func calcCooldowns(now uint64, last []uint64, cd Cooldowns) Cooldowns {
+	if cd == nil {
+		cd = make(Cooldowns, len(last))
+	}
+
 	for i, when := range last {
 		if i >= MaxActionType || when == 0 {
 			cd[i] = 0
@@ -224,14 +229,19 @@ func (g *Game) Shutdown() {
 	g.pump.Stop()
 }
 
-func (g *Game) GetCooldowns(s *Session) Cooldowns {
+func (g *Game) GetCooldowns(s *Session, cds Cooldowns) Cooldowns {
 	now := g.FrameNum
 	last, ok := g.cooldowns[s]
 	if !ok {
-		return nil
+		if cds == nil {
+			return make(Cooldowns, len(zeroCooldowns))
+		}
+
+		copy(cds, zeroCooldowns[:])
+		return cds
 	}
 
-	return calcCooldowns(now, last)
+	return calcCooldowns(now, last, cds)
 }
 
 func (g *Game) UserAction(s *Session, act ActionType, arg uint16) error {
