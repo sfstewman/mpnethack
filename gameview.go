@@ -55,9 +55,10 @@ func (inp *GameInput) onKey(ev *tcell.EventKey) *tcell.EventKey {
 		case 's':
 			s.Move(MoveDown)
 
-		case ' ':
+		case ' ', 'x':
 			s.Attack()
-		case 'v':
+
+		case 'v', 'z':
 			s.Defend()
 
 		case '1', '2', '3', '4':
@@ -111,27 +112,124 @@ func NewGameInput(sess *Session) *GameInput {
 	return inp
 }
 
+type StatusView struct {
+	*tview.Box
+	// P *Player
+	S *Session
+	G *Game
+}
+
+func NewStatusView(s *Session) *StatusView {
+	sv := &StatusView{
+		tview.NewBox(),
+		s,
+		s.G,
+	}
+
+	sv.SetDrawFunc(sv.DrawFunc)
+
+	return sv
+}
+
+func (sv *StatusView) DrawFunc(screen tcell.Screen, x, y, width, height int) (innerX, innerY, innerW, innerH int) {
+	innerX, innerY, innerW, innerH = sv.GetInnerRect()
+
+	// draw char stats
+
+	// draw actions and cooldowns
+	cds := sv.G.GetCooldowns(sv.S)
+
+	dy := 0
+	for actInd, nticks := range cds {
+		if dy >= innerH {
+			break
+		}
+
+		act := ActionType(actInd)
+
+		var s string
+		switch act {
+		case Move:
+			s = "MV "
+		case Attack:
+			s = "ATT"
+		case Defend:
+			s = "DEF"
+		default:
+			continue
+		}
+
+		clr := tcell.ColorWhite
+		if nticks > 0 {
+			clr = tcell.ColorGray
+		}
+
+		style := tcell.StyleDefault.
+			Background(tview.Styles.PrimitiveBackgroundColor).
+			Foreground(clr)
+
+		prog := ""
+		switch {
+		case nticks > 50:
+			prog = fmt.Sprintf("<==%d==>", nticks/10)
+		case nticks > 20:
+			prog = "<===>"
+		case nticks > 15:
+			prog = "<==>"
+		case nticks > 10:
+			prog = "<=>"
+		case nticks > 5:
+			prog = "<>"
+		case nticks == 0:
+			prog = ""
+		}
+
+		dx := 0
+		for _, ch := range s {
+			if dx < innerW {
+				screen.SetContent(innerX+dx, innerY+dy, ch, nil, style)
+			}
+			dx++
+		}
+
+		for _, ch := range prog {
+			if dx < innerW {
+				screen.SetContent(innerX+dx, innerY+dy, ch, nil, style)
+			}
+
+			dx++
+		}
+
+		dy += 1
+	}
+
+	return innerX, innerY, innerW, innerH
+}
+
 type GameView struct {
 	*tview.Pages
 
 	G *Game
-
-	Popup *tview.Modal
-
 	// P *Player
+	S *Session
+
+	Popup   *tview.Modal
 	W       *tview.TextView
-	Status  *tview.TextView
+	Status  *StatusView
 	ChatLog *tview.TextView
 	Input   *GameInput
 }
 
 func NewGameView(s *Session) *GameView {
 	gv := &GameView{
-		Pages:   tview.NewPages(),
-		G:       s.G,
+		Pages: tview.NewPages(),
+
+		G: s.G,
+		S: s,
+
 		Popup:   tview.NewModal(),
 		W:       tview.NewTextView(),
-		Status:  tview.NewTextView(),
+		Status:  NewStatusView(s),
 		ChatLog: tview.NewTextView(),
 		Input:   NewGameInput(s),
 	}
@@ -181,6 +279,13 @@ func NewGameView(s *Session) *GameView {
 	gv.AddPage("modal", modal, true, false)
 
 	return gv
+}
+
+func (gv *GameView) Draw(scr tcell.Screen) {
+	gv.Pages.Draw(scr)
+	if gv.Input.Mode == InputDirect {
+		scr.HideCursor()
+	}
 }
 
 func (gv *GameView) Message(l MsgLevel, s string) error {

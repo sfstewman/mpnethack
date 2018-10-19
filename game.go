@@ -42,6 +42,21 @@ const (
 	MaxActionType int = iota
 )
 
+func (act ActionType) String() string {
+	switch act {
+	case Nothing:
+		return "ACT_NOP"
+	case Move:
+		return "ACT_MOV"
+	case Attack:
+		return "ACT_ATT"
+	case Defend:
+		return "ACT_DEF"
+	default:
+		return fmt.Sprintf("ACT_UNK_%d", int(act))
+	}
+}
+
 const (
 	MoveLeft = 1 + iota
 	MoveRight
@@ -49,15 +64,33 @@ const (
 	MoveDown
 )
 
-var UserActionCooldownTicks []uint64
+var UserActionCooldownTicks = [MaxActionType]uint64{
+	Nothing: 0,
+	Move:    2,
+	Attack:  100,
+	Defend:  150,
+}
 
-func init() {
-	UserActionCooldownTicks = make([]uint64, MaxActionType)
+type Cooldowns []uint32
 
-	UserActionCooldownTicks[Nothing] = 0
-	UserActionCooldownTicks[Move] = 5
-	UserActionCooldownTicks[Attack] = 5
-	UserActionCooldownTicks[Defend] = 8
+func calcCooldowns(now uint64, last []uint64) Cooldowns {
+	cd := make(Cooldowns, len(last))
+	for i, when := range last {
+		if i >= MaxActionType || when == 0 {
+			cd[i] = 0
+			continue
+		}
+
+		nextTime := when + UserActionCooldownTicks[i]
+		if now >= nextTime {
+			cd[i] = 0
+			continue
+		}
+
+		cd[i] = uint32(nextTime - now)
+	}
+
+	return cd
 }
 
 type actionKey struct {
@@ -70,6 +103,87 @@ type action struct {
 	Arg  uint16
 }
 
+type Marker uint16
+type MarkerArchetype uint8
+
+func NewMarker(ma MarkerArchetype, minst uint16) Marker {
+	return Marker((minst & 0x3fff) | ((uint16(ma) & 7) << 13))
+}
+
+func (m Marker) Type() MarkerArchetype {
+	return MarkerArchetype(m >> 13)
+}
+
+const (
+	MarkerSpace MarkerArchetype = iota
+	MarkerBounds
+	MarkerObject
+	MarkerPortal
+	MarkerSpawner
+	MarkerDoor
+)
+
+const (
+	MarkerVoid  Marker = Marker(uint16(MarkerSpace)<<13 | 0)
+	MarkerEmpty Marker = Marker(uint16(MarkerSpace)<<13 | 1)
+
+	MarkerBorder Marker = Marker(uint16(MarkerBounds)<<13 | 0)
+	MarkerWall   Marker = Marker(uint16(MarkerBounds)<<13 | 1)
+)
+
+const (
+	LevelWidth  = 128
+	LevelHeight = 128
+
+	DefaultPlayerRow  = 3
+	DefaultPlayerCol0 = LevelWidth / 4
+)
+
+type MobType uint32
+
+type Mob struct {
+	I, J int
+	Type MobType
+}
+
+type Player struct {
+	I, J int
+	S    *Session
+}
+
+type Level struct {
+	W, H  int
+	Board []Marker
+
+	Mobs []Mob
+}
+
+func NewBoxLevel(w, h int) *Level {
+	l := &Level{
+		W: w,
+		H: h,
+	}
+
+	l.Board = make([]Marker, w*h)
+	for j := 0; j < w; j++ {
+		l.Board[0*w+j] = MarkerBorder
+		l.Board[(h-1)*w+j] = MarkerBorder
+	}
+
+	for i := 1; i < h-1; i++ {
+		l.Board[i*w+0] = MarkerBorder
+		l.Board[i*w+w-1] = MarkerBorder
+	}
+
+	for i := 1; i < h-1; i++ {
+		for j := 1; j < w-1; j++ {
+			l.Board[w*i+j] = MarkerEmpty
+		}
+	}
+
+	return l
+}
+
 type Game struct {
 	mu   sync.RWMutex
 	pump *time.Ticker
@@ -78,8 +192,11 @@ type Game struct {
 	Active   []*Session
 	FrameNum uint64
 
-	cooldowns map[actionKey]uint64
+	cooldowns map[*Session][]uint64
 	actions   map[*Session]action
+
+	Level   *Level
+	Players []Player
 }
 
 func NewGame(players []*Session, ctx context.Context) *Game {
@@ -88,8 +205,16 @@ func NewGame(players []*Session, ctx context.Context) *Game {
 		Active: players,
 		Ctx:    ctx,
 
-		cooldowns: make(map[actionKey]uint64),
+		cooldowns: make(map[*Session][]uint64),
 		actions:   make(map[*Session]action),
+		Level:     NewBoxLevel(LevelWidth, LevelHeight),
+	}
+
+	g.Players = make([]Player, len(players))
+	for i := range g.Players {
+		g.Players[i].S = players[i]
+		g.Players[i].I = DefaultPlayerRow
+		g.Players[i].J = DefaultPlayerCol0 + i
 	}
 
 	return g
@@ -99,28 +224,45 @@ func (g *Game) Shutdown() {
 	g.pump.Stop()
 }
 
+func (g *Game) GetCooldowns(s *Session) Cooldowns {
+	now := g.FrameNum
+	last, ok := g.cooldowns[s]
+	if !ok {
+		return nil
+	}
+
+	return calcCooldowns(now, last)
+}
+
 func (g *Game) UserAction(s *Session, act ActionType, arg uint16) error {
 	if int(act) >= len(UserActionCooldownTicks) {
 		return InvalidCooldownError
 	}
 
-	k := actionKey{s, act}
+	// k := actionKey{s, act}
 
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	now := g.FrameNum
 
-	last := g.cooldowns[k]
+	actionCDs, ok := g.cooldowns[s]
+	if !ok {
+		actionCDs = make([]uint64, len(UserActionCooldownTicks))
+		g.cooldowns[s] = actionCDs
+	}
+
+	last := actionCDs[act]
 	if last > 0 && now-last < UserActionCooldownTicks[act] {
 		return OnCooldownError
 	}
 
 	if act != Nothing {
-		g.cooldowns[k] = now
+		actionCDs[act] = now
+		fmt.Printf("action %v, cooldowns %v\n", act, actionCDs)
 	}
 
-	g.actions[s] = action{act, arg}
+	g.handleAction(s, action{act, arg})
 
 	return nil
 }
