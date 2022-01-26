@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"net"
+	"io"
+	"sync"
 
-	"github.com/gdamore/tcell"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"golang.org/x/crypto/ssh"
 )
 
 type SessionState int
@@ -29,13 +28,72 @@ const (
 	Administrator
 )
 
+type SshTty struct {
+	io.ReadWriteCloser
+
+	Config         IOScreenConfig
+	ResizeCallback func()
+	mu             sync.Mutex
+}
+
+func (*SshTty) Start() error {
+	return nil
+}
+
+func (*SshTty) Stop() error {
+	return nil
+}
+
+func (*SshTty) Drain() error {
+	return nil
+}
+
+func (tty *SshTty) NotifyResize(cb func()) {
+	tty.mu.Lock()
+	defer tty.mu.Unlock()
+
+	tty.ResizeCallback = cb
+}
+
+func (tty *SshTty) WindowSize() (width int, height int, err error) {
+	tty.mu.Lock()
+	defer tty.mu.Unlock()
+
+	return tty.Config.Width, tty.Config.Height, nil
+}
+
+func (tty *SshTty) Resize(w int, h int) {
+	tty.mu.Lock()
+	tty.Config.Width = w
+	tty.Config.Height = h
+
+	cb := tty.ResizeCallback
+
+	tty.mu.Unlock()
+
+	if cb != nil {
+		cb()
+	}
+}
+
 type Session struct {
-	Screen *IOScreen
+	Tty    *SshTty
+	Screen tcell.Screen
 	App    *tview.Application
-	G      *Game
-	GV     *GameView
-	State  SessionState
-	Flags  SessionFlag
+
+	G  *Game
+	GV *GameView
+
+	State SessionState
+	Flags SessionFlag
+}
+
+func (s *Session) IsAdministrator() bool {
+	return (s.Flags & Administrator) != 0
+}
+
+func (s *Session) HasGame() bool {
+	return s.G != nil
 }
 
 func (s *Session) Message(l MsgLevel, msg string) error {
@@ -44,9 +102,9 @@ func (s *Session) Message(l MsgLevel, msg string) error {
 	return err
 }
 
-func (s *Session) Resize(w, h uint32) {
-	if s.Screen != nil {
-		s.Screen.SizeChange(int(w), int(h))
+func (s *Session) WindowResize(w, h int) {
+	if s.Tty != nil {
+		s.Tty.Resize(w, h)
 	}
 }
 
@@ -180,138 +238,4 @@ func (s *Session) lobbyLoop(tcell.Event) {
 }
 
 func (s *Session) gameLoop(tcell.Event) {
-}
-
-func (s *Session) SizeChange(w, h int) {
-	if s.Screen != nil {
-		s.Screen.SizeChange(w, h)
-	}
-}
-
-type WindowSize struct {
-	Width, Height, WidthPix, HeightPix uint32
-}
-
-type PtyReq struct {
-	Term string
-
-	Width, Height, WidthPix, HeightPix uint32
-
-	Modes []byte
-}
-
-func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- IOScreenConfig) {
-	for req := range in {
-		fmt.Printf("request '%s' reply=%v len(payload)=%d\n", req.Type, req.WantReply, len(req.Payload))
-		switch req.Type {
-		case "shell":
-			req.Reply(true, nil)
-
-		case "pty-req":
-			if cfgCh == nil {
-				req.Reply(false, nil)
-				continue
-			}
-
-			req.Reply(true, nil)
-			pty := PtyReq{}
-			err := ssh.Unmarshal(req.Payload, &pty)
-			if err != nil {
-				log.Printf("error pty request: %v\n", err)
-				continue
-			}
-
-			fmt.Printf("pty request: %+v\n", pty)
-			cfgCh <- IOScreenConfig{
-				Term:      pty.Term,
-				Width:     int(pty.Width),
-				Height:    int(pty.Height),
-				TrueColor: false,
-			}
-			close(cfgCh)
-			cfgCh = nil
-
-		case "window-change":
-			fmt.Printf("window change: %d bytes\n", len(req.Payload))
-			wsz := WindowSize{}
-			err := ssh.Unmarshal(req.Payload, &wsz)
-			if err == nil {
-				fmt.Printf("window dims: %d x %d (%dpx x %dpx)\n",
-					wsz.Width, wsz.Height, wsz.WidthPix, wsz.HeightPix)
-
-				sess.SizeChange(int(wsz.Width), int(wsz.Height))
-				if req.WantReply {
-					req.Reply(true, nil)
-				}
-			} else {
-				log.Printf("error parsing window change: %v\n", err)
-			}
-		default:
-			req.Reply(false, nil)
-		}
-	}
-}
-
-func handleConnection(c net.Conn, cfg *ssh.ServerConfig) {
-	conn, chans, reqs, err := ssh.NewServerConn(c, cfg)
-	if err != nil {
-		log.Printf("failed to handshake: %v", err)
-		return
-	}
-
-	defer conn.Close()
-
-	go ssh.DiscardRequests(reqs)
-
-	for chReq := range chans {
-		if chReq.ChannelType() != "session" {
-			chReq.Reject(ssh.UnknownChannelType, "unknown/unsupported channel type")
-			continue
-		}
-
-		channel, requests, err := chReq.Accept()
-		if err != nil {
-			log.Printf("could not accept channel: %v", err)
-			return
-		}
-
-		cfgCh := make(chan IOScreenConfig)
-		sess := &Session{}
-
-		go channelRequests(sess, requests, cfgCh)
-		cfg := <-cfgCh
-
-		sess.Screen, err = NewIOScreen(channel, cfg)
-		if err != nil {
-			log.Printf("error creating screen: %v", err)
-			return
-		}
-
-		/*
-			term := terminal.NewTerminal(channel, "> ")
-			go func() {
-				defer channel.Close()
-				for {
-					line, err := term.ReadLine()
-
-					if err == io.EOF {
-						fmt.Printf("connection closed\n")
-						break
-					}
-					if err != nil {
-						log.Printf("error reading line: %v", err)
-						break
-					}
-
-					fmt.Fprintf(term, "received: %s\n", line)
-					fmt.Println(line)
-				}
-			}()
-		*/
-
-		if err := sess.Run(); err != nil {
-			log.Printf("session error: %v", err)
-		}
-		return
-	}
 }

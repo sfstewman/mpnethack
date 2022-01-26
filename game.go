@@ -108,34 +108,6 @@ type action struct {
 	Arg  uint16
 }
 
-type Marker uint16
-type MarkerArchetype uint8
-
-func NewMarker(ma MarkerArchetype, minst uint16) Marker {
-	return Marker((minst & 0x3fff) | ((uint16(ma) & 7) << 13))
-}
-
-func (m Marker) Type() MarkerArchetype {
-	return MarkerArchetype(m >> 13)
-}
-
-const (
-	MarkerSpace MarkerArchetype = iota
-	MarkerBounds
-	MarkerObject
-	MarkerPortal
-	MarkerSpawner
-	MarkerDoor
-)
-
-const (
-	MarkerVoid  Marker = Marker(uint16(MarkerSpace)<<13 | 0)
-	MarkerEmpty Marker = Marker(uint16(MarkerSpace)<<13 | 1)
-
-	MarkerBorder Marker = Marker(uint16(MarkerBounds)<<13 | 0)
-	MarkerWall   Marker = Marker(uint16(MarkerBounds)<<13 | 1)
-)
-
 const (
 	LevelWidth  = 128
 	LevelHeight = 128
@@ -147,46 +119,14 @@ const (
 type MobType uint32
 
 type Mob struct {
-	I, J int
+	I, J, H, W int
+
 	Type MobType
 }
 
 type Player struct {
 	I, J int
 	S    *Session
-}
-
-type Level struct {
-	W, H  int
-	Board []Marker
-
-	Mobs []Mob
-}
-
-func NewBoxLevel(w, h int) *Level {
-	l := &Level{
-		W: w,
-		H: h,
-	}
-
-	l.Board = make([]Marker, w*h)
-	for j := 0; j < w; j++ {
-		l.Board[0*w+j] = MarkerBorder
-		l.Board[(h-1)*w+j] = MarkerBorder
-	}
-
-	for i := 1; i < h-1; i++ {
-		l.Board[i*w+0] = MarkerBorder
-		l.Board[i*w+w-1] = MarkerBorder
-	}
-
-	for i := 1; i < h-1; i++ {
-		for j := 1; j < w-1; j++ {
-			l.Board[w*i+j] = MarkerEmpty
-		}
-	}
-
-	return l
 }
 
 type Game struct {

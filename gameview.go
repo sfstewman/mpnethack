@@ -5,7 +5,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/gdamore/tcell"
+	tcell "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 

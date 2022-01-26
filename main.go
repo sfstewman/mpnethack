@@ -2,68 +2,86 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	// "io"
-	"io/ioutil"
 	"log"
-	"net"
 
-	"golang.org/x/crypto/ssh"
+	"github.com/gdamore/tcell/v2"
+	// "io"
 	// "golang.org/x/crypto/ssh/terminal"
 	// "github.com/gdamore/tcell/views"
 )
 
-func authLog(conn ssh.ConnMetadata, method string, err error) {
-	fmt.Printf("login attempt[%s] %v : %v\n", method, conn, err)
-}
-
-func main() {
+func main1() {
 	var hostKeyPath string
 
 	flag.StringVar(&hostKeyPath, "hostkey", "", "Path to the host key")
 	flag.Parse()
 
-	if hostKeyPath == "" {
-		log.Fatal("must suppose a host key with -hostkey option")
+	if hostKeyPath != "" {
+		go acceptNetworkLogins(hostKeyPath)
 	}
 
-	cfg := &ssh.ServerConfig{
-		NoClientAuth:    true,
-		AuthLogCallback: authLog,
-		BannerCallback: func(conn ssh.ConnMetadata) string {
-			return "WELCOME to multiplayer nethack"
-		},
-		ServerVersion: "SSH-2.0-mpnethack",
-	}
+	var err error
 
-	{
-		hkData, err := ioutil.ReadFile(hostKeyPath)
-		if err != nil {
-			log.Fatalf("cannot read host key from '%s': %v", hostKeyPath, err)
-		}
-
-		hk, err := ssh.ParsePrivateKey(hkData)
-		if err != nil {
-			log.Fatalf("'%s' has an invalid host key: %v", hostKeyPath, err)
-		}
-
-		cfg.AddHostKey(hk)
-	}
-
-	ln, err := net.Listen("tcp", "localhost:5612")
+	scr, err := tcell.NewScreen()
 	if err != nil {
-		log.Fatalf("error listening for connections: %v", err)
+		log.Printf("error creating screen: %v", err)
+		return
 	}
 
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Printf("error in accept: %v", err)
-			continue
-		}
-
-		go handleConnection(conn, cfg)
+	sess := &Session{
+		Screen: scr,
 	}
 
-	fmt.Println("vim-go")
+	defStyle := tcell.StyleDefault.Background(tcell.ColorReset).Foreground(tcell.ColorReset)
+	// boxStyle := tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorPurple)
+
+	scr.SetStyle(defStyle)
+	// s.EnableMouse()
+	// s.EnablePaste()
+	scr.Clear()
+
+	/*
+		term := terminal.NewTerminal(channel, "> ")
+		go func() {
+			defer channel.Close()
+			for {
+				line, err := term.ReadLine()
+
+				if err == io.EOF {
+					fmt.Printf("connection closed\n")
+					break
+				}
+				if err != nil {
+					log.Printf("error reading line: %v", err)
+					break
+				}
+
+				fmt.Fprintf(term, "received: %s\n", line)
+				fmt.Println(line)
+			}
+		}()
+	*/
+
+	if err := sess.Run(); err != nil {
+		log.Printf("session error: %v", err)
+	}
+	return
+}
+
+func main() {
+	systemLog, err := NewSystemLog("admin.log", nil)
+	if err != nil {
+		log.Fatalf("error setting up system logs: %v", err)
+		return
+	}
+
+	session := &Session{
+		Flags: Authenticated | Administrator,
+	}
+
+	app := setupUI(session, systemLog)
+
+	if err := app.Run(); err != nil {
+		panic(err)
+	}
 }
