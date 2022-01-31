@@ -8,6 +8,7 @@ import (
 
 	tcell "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/sfstewman/mpnethack/util"
 )
 
 type Actor interface {
@@ -138,10 +139,10 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 	}
 
 	if m.first {
-		session.Message(MsgSystem, fmt.Sprintf("[%d,%d,%d,%d] pl=(%d,%d) delta=(%d,%d) lvl0=(%d,%d) lvl1=(%d,%d), scr0=(%d,%d)",
+		session.Message(util.MsgSystem, fmt.Sprintf("[%d,%d,%d,%d] pl=(%d,%d) delta=(%d,%d) lvl0=(%d,%d) lvl1=(%d,%d), scr0=(%d,%d)",
 			x0, y0, w, h, plJ, plI, deltaJ, deltaI, lvlJ0, lvlI0, lvlJ1, lvlI1, lvlJ0+x0-deltaJ, lvlI0+y0-deltaI))
 
-		session.Message(MsgSystem, fmt.Sprintf("void: %d, empty: %d, border: %d, wall: %d, size: %d",
+		session.Message(util.MsgSystem, fmt.Sprintf("void: %d, empty: %d, border: %d, wall: %d, size: %d",
 			numVoid, numEmpty, numBorder, numWall, size))
 	}
 
@@ -162,7 +163,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		}
 
 		if m.first {
-			session.Message(MsgSystem, fmt.Sprintf("player (%d,%d) x=%d, y=%d, marker=\"%c\"",
+			session.Message(util.MsgSystem, fmt.Sprintf("player (%d,%d) x=%d, y=%d, marker=\"%c\"",
 				pl.J, pl.I, x, y, ch))
 		}
 	}
@@ -185,7 +186,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		}
 
 		if m.first {
-			session.Message(MsgSystem, fmt.Sprintf("mob %s (%d,%d) x=%d, y=%d, marker=\"%c\"",
+			session.Message(util.MsgSystem, fmt.Sprintf("mob %s (%d,%d) x=%d, y=%d, marker=\"%c\"",
 				mobInfo.Name, mob.J, mob.I, x, y, ch))
 		}
 	}
@@ -236,7 +237,7 @@ type InputArea struct {
 	HasLastKey bool
 }
 
-func NewInputArea(ui *UI, gl *GameLog) *InputArea {
+func NewInputArea(ui *UI, gl *util.GameLog) *InputArea {
 	inp := &InputArea{
 		Flex:       tview.NewFlex(),
 		InputMode:  InputGame,
@@ -432,7 +433,7 @@ type UI struct {
 	Actions   map[string]func()
 	PageNames map[string]tview.Primitive
 
-	AdminLog   *GameLog
+	AdminLog   *util.GameLog
 	AdminInput *InputArea
 	// LogView *LogView
 
@@ -550,7 +551,7 @@ func (ui *UI) Quit() {
 type LogView struct {
 	*tview.TextView
 
-	Log *GameLog
+	Log *util.GameLog
 
 	Offset int
 
@@ -561,10 +562,10 @@ type LogView struct {
 const LogTimeLayout = "2006/01/02 03:04:05 MST"
 
 func NewLogViewWithLines(numLines int) *LogView {
-	return NewLogView(NewGameLog(numLines))
+	return NewLogView(util.NewGameLog(numLines))
 }
 
-func NewLogView(gl *GameLog) *LogView {
+func NewLogView(gl *util.GameLog) *LogView {
 	txtView := tview.NewTextView().SetDynamicColors(true)
 
 	v := &LogView{
@@ -643,7 +644,7 @@ func (v *LogView) redrawLog() {
 	first := true
 	var minSeq, maxSeq uint
 	var minCnt, maxCnt int
-	v.Log.VisitLines(0, func(msg LogMessage) bool {
+	v.Log.VisitLines(0, func(msg util.LogMessage) bool {
 		if first || msg.Seq < minSeq {
 			minSeq = msg.Seq
 			minCnt = count
@@ -664,7 +665,7 @@ func (v *LogView) redrawLog() {
 	}
 
 	lineCount := 0
-	v.Log.VisitLines(off, func(msg LogMessage) bool {
+	v.Log.VisitLines(off, func(msg util.LogMessage) bool {
 		s := v.formatMessage(msg)
 		fmt.Fprint(wr, s)
 		lineCount++
@@ -681,25 +682,25 @@ func (v *LogView) Draw(scr tcell.Screen) {
 	v.TextView.Draw(scr)
 }
 
-func (v *LogView) formatMessage(msg LogMessage) string {
+func (v *LogView) formatMessage(msg util.LogMessage) string {
 	var btag, etag, sfx string
 
 	etag = "[-:-:-]"
 	switch msg.Level {
-	case MsgDebug:
+	case util.MsgDebug:
 		btag = "[gray:black]"
-	case MsgInfo:
+	case util.MsgInfo:
 		btag = ""
 		etag = ""
-	case MsgChat:
+	case util.MsgChat:
 		btag = "[blue:black]"
-	case MsgPrivate:
+	case util.MsgPrivate:
 		btag = "[pink:black]"
-	case MsgGame:
+	case util.MsgGame:
 		btag = "[green:black]"
-	case MsgAdmin:
+	case util.MsgAdmin:
 		btag = "[red:black:b]"
-	case MsgSystem:
+	case util.MsgSystem:
 		btag = "[yellow:black:b]"
 	}
 
@@ -713,7 +714,7 @@ func (v *LogView) formatMessage(msg LogMessage) string {
 	return fmt.Sprintf("%s%s [%d] %s%s%s", btag, timeStr, msg.Seq, tview.Escape(line), etag, sfx)
 }
 
-func (v *LogView) AddLine(lvl MsgLevel, line string) {
+func (v *LogView) AddLine(lvl util.MsgLevel, line string) {
 	v.Log.LogLine(lvl, line)
 }
 
@@ -754,9 +755,9 @@ func setupAdminPage(ui *UI, sysLog *SystemLog) {
 		main.AddPage("logs", logFrame, true, true)
 	*/
 
-	adminLog := NewGameLog(1000)
+	adminLog := util.NewGameLog(1000)
 	sysLog.SetCallback(func(line string) {
-		adminLog.LogLine(MsgSystem, line)
+		adminLog.LogLine(util.MsgSystem, line)
 	})
 
 	ui.AdminLog = adminLog

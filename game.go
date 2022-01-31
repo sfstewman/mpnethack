@@ -8,10 +8,11 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/sfstewman/mpnethack/util"
 )
 
 var (
@@ -22,22 +23,6 @@ var (
 
 const (
 	GameRefreshInterval time.Duration = 100 * time.Millisecond
-)
-
-// Game message levels
-type MsgLevel int
-
-const (
-	MsgDebug MsgLevel = iota
-	MsgInfo
-	MsgChat
-	MsgPrivate
-	MsgGame
-	MsgAdmin
-	MsgSystem
-	// MsgWarn
-	// MsgCrit
-	// MsgAdmin
 )
 
 type ActionType uint16
@@ -294,115 +279,6 @@ func (p *Player) GetPos() (i int, j int, h int, w int) {
 	return
 }
 
-type LogMessage struct {
-	Level MsgLevel
-	Time  time.Time
-	Text  string
-	Seq   uint
-}
-
-type GameLog struct {
-	Lines    []LogMessage
-	LastLine int
-	Seq      uint
-
-	Callback func(LogMessage)
-
-	mu sync.RWMutex
-}
-
-func NewGameLog(numLines int) *GameLog {
-	return &GameLog{
-		Lines: make([]LogMessage, 0, numLines),
-	}
-}
-
-func (gl *GameLog) addLine(lvl MsgLevel, line string) LogMessage {
-	gl.mu.Lock()
-	defer gl.mu.Unlock()
-
-	if strings.HasSuffix(line, "\r\n") {
-		line = line[:len(line)-2]
-	} else if strings.HasSuffix(line, "\n") {
-		line = line[:len(line)-1]
-	}
-
-	seq := gl.Seq
-	gl.Seq++
-	msg := LogMessage{Level: lvl, Time: time.Now(), Text: line, Seq: seq}
-
-	if len(gl.Lines) < cap(gl.Lines) {
-		gl.Lines = append(gl.Lines, msg)
-		gl.LastLine = len(gl.Lines) - 1
-	} else {
-		ind := gl.LastLine + 1
-		if ind >= len(gl.Lines) {
-			ind = 0
-		}
-
-		gl.Lines[ind] = msg
-		gl.LastLine = ind
-	}
-
-	return msg
-}
-
-func (gl *GameLog) LogLine(lvl MsgLevel, line string) {
-	msg := gl.addLine(lvl, line)
-
-	if gl.Callback != nil {
-		gl.Callback(msg)
-	}
-}
-
-func (gl *GameLog) Log(lvl MsgLevel, format string, args ...interface{}) {
-	entry := fmt.Sprintf(format, args...)
-	lines := strings.Split(entry, "\n")
-	for _, l := range lines {
-		gl.LogLine(lvl, l)
-	}
-}
-
-func (gl *GameLog) NumLines() int {
-	gl.mu.RLock()
-	defer gl.mu.RUnlock()
-
-	return len(gl.Lines)
-}
-
-func (gl *GameLog) VisitLines(offset int, visitor func(LogMessage) bool) bool {
-	gl.mu.RLock()
-	defer gl.mu.RUnlock()
-
-	n := len(gl.Lines)
-	ll := gl.LastLine
-
-	if offset < 0 {
-		offset += n
-		if offset < 0 {
-			offset = 0
-		}
-	}
-
-	if offset >= n {
-		return true
-	}
-
-	// (LastLine+1) % n -- first line in the buffer (offset == 0)
-	//
-	// want offset ... n lines
-
-	for i := offset; i < n; i++ {
-		ind := (ll + i + 1) % n
-
-		if !visitor(gl.Lines[ind]) {
-			return false
-		}
-	}
-
-	return true
-}
-
 type EffectType int
 
 const (
@@ -423,7 +299,7 @@ type Game struct {
 	RNG *rand.Rand
 
 	Active   []*Session
-	GameLog  *GameLog
+	GameLog  *util.GameLog
 	FrameNum uint64
 
 	cooldowns map[*Session][]uint64
@@ -514,7 +390,7 @@ func NewGame(l *Level) (*Game, error) {
 
 		RNG: rng,
 
-		GameLog: NewGameLog(GameLogNumLines),
+		GameLog: util.NewGameLog(GameLogNumLines),
 
 		cooldowns: make(map[*Session][]uint64),
 		actions:   make(map[*Session]action),
@@ -609,7 +485,7 @@ func (g *Game) PlayerJoin(sess *Session) (*Player, error) {
 	g.Markers[marker] = pl
 
 	g.Active = append(g.Active, sess)
-	g.messagef(MsgInfo, "%s (%c) joined the game!", sess.User, marker)
+	g.messagef(util.MsgInfo, "%s (%c) joined the game!", sess.User, marker)
 
 	return pl, nil
 }
@@ -632,7 +508,7 @@ func (g *Game) PlayerLeave(sess *Session) {
 		}
 	}
 
-	g.Messagef(MsgInfo, "%s left the game!", sess.User)
+	g.Messagef(util.MsgInfo, "%s left the game!", sess.User)
 }
 
 func (g *Game) Shutdown() {
@@ -738,7 +614,7 @@ func (g *Game) handleAction(s *Session, act action) {
 		}
 
 		if what := g.hasCollision(newI, newJ); what != nil {
-			g.messagef(MsgGame, "%s tried to move %s but hit a %s", user, dir, what.Name())
+			g.messagef(util.MsgGame, "%s tried to move %s but hit a %s", user, dir, what.Name())
 		} else {
 			pl.I = newI
 			pl.J = newJ
@@ -757,7 +633,7 @@ func (g *Game) handleAction(s *Session, act action) {
 			pl.SwingFacing = facing
 		}
 	case Defend:
-		g.messagef(MsgGame, "%s is defending", user)
+		g.messagef(util.MsgGame, "%s is defending", user)
 	}
 }
 
@@ -910,15 +786,15 @@ func (g *Game) loopInner() {
 						toHit := pl.GetStats().ToHit(obj.GetStats())
 						if rollD20(g.RNG) <= toHit {
 							dmg := rollMdN(g.RNG, 2, 4)
-							g.messagef(MsgGame, "%s slashes %s with his rusty sword for %d damage", pl.Name(), coll.Name(), dmg)
+							g.messagef(util.MsgGame, "%s slashes %s with his rusty sword for %d damage", pl.Name(), coll.Name(), dmg)
 						} else {
-							g.messagef(MsgGame, "%s swings wildy at %s but misses", pl.Name(), coll.Name())
+							g.messagef(util.MsgGame, "%s swings wildy at %s but misses", pl.Name(), coll.Name())
 						}
 					case Marker:
-						g.messagef(MsgGame, "%s slashes at the %s.  Thankfully this sword can't get any less sharp.", pl.Name(), coll.Name())
+						g.messagef(util.MsgGame, "%s slashes at the %s.  Thankfully this sword can't get any less sharp.", pl.Name(), coll.Name())
 					case *Player:
 						_ = obj
-						g.messagef(MsgGame, "The sword of %s collides with %s, who looks very miffed.", pl.Name(), coll.Name())
+						g.messagef(util.MsgGame, "The sword of %s collides with %s, who looks very miffed.", pl.Name(), coll.Name())
 					}
 				}
 
@@ -970,7 +846,7 @@ func (g *Game) Loop() {
 	doneCh := g.Ctx.Done()
 	updCh := g.pump.C
 
-	g.Message(MsgInfo, "Welcome!")
+	g.Message(util.MsgInfo, "Welcome!")
 
 GameLoop:
 	for {
@@ -1000,29 +876,29 @@ func (g *Game) Command(sess *Session, txt string) error {
 	}
 }
 
-func (g *Game) Input(l MsgLevel, sess *Session, txt string) error {
+func (g *Game) Input(l util.MsgLevel, sess *Session, txt string) error {
 	return g.Message(l, txt)
 }
 
-func (g *Game) Messagef(l MsgLevel, fmtStr string, args ...interface{}) error {
+func (g *Game) Messagef(l util.MsgLevel, fmtStr string, args ...interface{}) error {
 	s := fmt.Sprintf(fmtStr, args...)
 	return g.Message(l, s)
 }
 
-func (g *Game) Message(l MsgLevel, s string) error {
+func (g *Game) Message(l util.MsgLevel, s string) error {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	return g.message(l, s)
 }
 
-func (g *Game) messagef(l MsgLevel, fmtStr string, args ...interface{}) error {
+func (g *Game) messagef(l util.MsgLevel, fmtStr string, args ...interface{}) error {
 	s := fmt.Sprintf(fmtStr, args...)
 	return g.message(l, s)
 }
 
 // Assumes lock is held (either read or write)
-func (g *Game) message(lvl MsgLevel, s string) error {
+func (g *Game) message(lvl util.MsgLevel, s string) error {
 	// XXX: global game log
 	var errs []error
 	for _, sess := range g.Active {
