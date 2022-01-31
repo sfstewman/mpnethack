@@ -1,4 +1,4 @@
-package main
+package mpnethack
 
 import (
 	"fmt"
@@ -1080,7 +1080,7 @@ func NewLobbyScreen(ui *UI) *LobbyScreen {
 	return scr
 }
 
-func setupUI(sess *Session, lobby *Lobby, sysLog *SystemLog) *UI {
+func SetupUI(sess *Session, lobby *Lobby, sysLog *SystemLog) *UI {
 	app := tview.NewApplication()
 
 	pages := tview.NewPages()

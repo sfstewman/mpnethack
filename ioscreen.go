@@ -1,3 +1,15 @@
+//
+// ioscreen.go
+//
+// IOScreen adapted from tcell.tScreen for mpnethack by Shannon F. Stewman
+//
+// Changes:
+//    - terminal type is passed as a parameter instead of extracted from
+//      the TERM environment variable
+//    - terminal height/width are passed as parameters instead of extracted
+//      from the LINES/COLUMNS environment parameters
+//
+
 // Copyright 2021 The TCell Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +24,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package mpnethack
 
 import (
 	"bytes"
