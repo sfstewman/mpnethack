@@ -1,14 +1,13 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
 )
 
 type SessionState int
@@ -37,14 +36,17 @@ type SshTty struct {
 }
 
 func (*SshTty) Start() error {
+	log.Printf("Start called")
 	return nil
 }
 
 func (*SshTty) Stop() error {
+	log.Printf("Stop called")
 	return nil
 }
 
 func (*SshTty) Drain() error {
+	log.Printf("Drain called")
 	return nil
 }
 
@@ -63,14 +65,16 @@ func (tty *SshTty) WindowSize() (width int, height int, err error) {
 }
 
 func (tty *SshTty) Resize(w int, h int) {
-	tty.mu.Lock()
-	tty.Config.Width = w
-	tty.Config.Height = h
+	cb := (func() func() {
+		tty.mu.Lock()
+		defer tty.mu.Unlock()
+		tty.Config.Width = w
+		tty.Config.Height = h
 
-	cb := tty.ResizeCallback
+		return tty.ResizeCallback
+	})()
 
-	tty.mu.Unlock()
-
+	log.Printf("RESIZE request w=%d, h=%d, cb=%v", w, h, cb)
 	if cb != nil {
 		cb()
 	}
@@ -79,13 +83,30 @@ func (tty *SshTty) Resize(w int, h int) {
 type Session struct {
 	Tty    *SshTty
 	Screen tcell.Screen
-	App    *tview.Application
 
-	G  *Game
-	GV *GameView
+	User string
+
+	UI *UI
+
+	G      *Game
+	Player *Player
+
+	SessionLog *GameLog
 
 	State SessionState
 	Flags SessionFlag
+}
+
+const SessionGameLogLines = 100
+
+func NewSession(user string, flags SessionFlag) *Session {
+	s := &Session{
+		User:       user,
+		SessionLog: NewGameLog(SessionGameLogLines),
+		Flags:      flags,
+	}
+
+	return s
 }
 
 func (s *Session) IsAdministrator() bool {
@@ -96,13 +117,15 @@ func (s *Session) HasGame() bool {
 	return s.G != nil
 }
 
-func (s *Session) Message(l MsgLevel, msg string) error {
-	err := s.GV.Message(l, msg)
-	s.Update()
-	return err
+func (s *Session) Message(lvl MsgLevel, msg string) error {
+	s.SessionLog.LogLine(lvl, msg)
+	// err := s.GV.Message(l, msg)
+	// s.Update()
+	return nil // err
 }
 
 func (s *Session) WindowResize(w, h int) {
+	log.Printf("Session[%p].WindowResize(w=%d,h=%d)  tty=%v", s, w, h, s.Tty)
 	if s.Tty != nil {
 		s.Tty.Resize(w, h)
 	}
@@ -113,7 +136,7 @@ type EventUpdate struct {
 }
 
 func (s *Session) Update() error {
-	s.App.Draw()
+	s.UI.Update()
 	return nil
 
 	/*
@@ -122,8 +145,12 @@ func (s *Session) Update() error {
 	*/
 }
 
-func (s *Session) Move(direc uint16) {
-	s.G.UserAction(s, Move, direc)
+func (s *Session) Quit() {
+	s.UI.Quit()
+}
+
+func (s *Session) Move(direc MoveDirection) {
+	s.G.UserAction(s, Move, int16(direc))
 }
 
 func (s *Session) Attack() {
@@ -146,32 +173,20 @@ func (s *Session) ConsoleInput(txt string) {
 	}
 }
 
-func (s *Session) Run() error {
-	s.App = tview.NewApplication()
-	s.App.SetScreen(s.Screen)
+func (s *Session) Join(g *Game) error {
+	if s.G != nil {
+		return fmt.Errorf("game is nil")
+	}
 
-	ctx, cancel := context.WithCancel(context.TODO())
-	defer cancel()
+	s.G = g
+	pl, err := g.PlayerJoin(s)
+	if err != nil {
+		return err
+	}
 
-	s.G = NewGame([]*Session{s}, ctx)
-	s.GV = NewGameView(s)
+	s.Player = pl
 
-	go s.G.Loop()
-
-	s.App.SetRoot(s.GV, true)
-	// box := tview.NewBox().SetBorder(true).SetTitle("Hello, world!")
-	// s.App.SetRoot(box, true)
-
-	/*
-		if err := s.Screen.Init(); err != nil {
-			return err
-		}
-
-		defer s.Screen.Fini()
-
-		return s.Loop()
-	*/
-	return s.App.Run()
+	return nil
 }
 
 func (s *Session) Loop() error {

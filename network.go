@@ -10,15 +10,15 @@ import (
 )
 
 func authLog(conn ssh.ConnMetadata, method string, err error) {
-	fmt.Printf("login attempt[%s] %v : %v\n", method, conn, err)
+	log.Printf("login attempt[%s] %v : %v\n", method, conn, err)
 }
 
-func acceptNetworkLogins(hostKeyPath string) {
+func acceptNetworkLogins(hostKeyPath string, lobby *Lobby, systemLog *SystemLog) {
 	cfg := &ssh.ServerConfig{
 		NoClientAuth:    true,
 		AuthLogCallback: authLog,
 		BannerCallback: func(conn ssh.ConnMetadata) string {
-			return "WELCOME to multiplayer nethack"
+			return "WELCOME to multiplayer nethack\r\n"
 		},
 		ServerVersion: "SSH-2.0-mpnethack",
 	}
@@ -49,7 +49,7 @@ func acceptNetworkLogins(hostKeyPath string) {
 			continue
 		}
 
-		go handleConnection(conn, cfg)
+		go handleConnection(conn, cfg, lobby, systemLog)
 	}
 }
 
@@ -67,7 +67,7 @@ type PtyReq struct {
 
 func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- IOScreenConfig) {
 	for req := range in {
-		fmt.Printf("request '%s' reply=%v len(payload)=%d\n", req.Type, req.WantReply, len(req.Payload))
+		log.Printf("request '%s' reply=%v len(payload)=%d\n", req.Type, req.WantReply, len(req.Payload))
 		switch req.Type {
 		case "shell":
 			req.Reply(true, nil)
@@ -86,7 +86,7 @@ func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- IOScree
 				continue
 			}
 
-			fmt.Printf("pty request: %+v\n", pty)
+			log.Printf("pty request: %+v\n", pty)
 			cfgCh <- IOScreenConfig{
 				Term:      pty.Term,
 				Width:     int(pty.Width),
@@ -97,11 +97,11 @@ func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- IOScree
 			cfgCh = nil
 
 		case "window-change":
-			fmt.Printf("window change: %d bytes\n", len(req.Payload))
+			log.Printf("window change: %d bytes\n", len(req.Payload))
 			wsz := WindowSize{}
 			err := ssh.Unmarshal(req.Payload, &wsz)
 			if err == nil {
-				fmt.Printf("window dims: %d x %d (%dpx x %dpx)\n",
+				log.Printf("window dims: %d x %d (%dpx x %dpx)\n",
 					wsz.Width, wsz.Height, wsz.WidthPix, wsz.HeightPix)
 
 				sess.WindowResize(int(wsz.Width), int(wsz.Height))
@@ -117,7 +117,7 @@ func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- IOScree
 	}
 }
 
-func handleConnection(c net.Conn, cfg *ssh.ServerConfig) {
+func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *Lobby, systemLog *SystemLog) {
 	conn, chans, reqs, err := ssh.NewServerConn(c, cfg)
 	if err != nil {
 		log.Printf("failed to handshake: %v", err)
@@ -141,21 +141,40 @@ func handleConnection(c net.Conn, cfg *ssh.ServerConfig) {
 		}
 
 		cfgCh := make(chan IOScreenConfig)
-		sess := &Session{}
+		sess := NewSession("Grufmore the Dominable", Authenticated)
+
+		fmt.Fprintf(channel, "\r\nConfiguring terminal\r\n")
 
 		go channelRequests(sess, requests, cfgCh)
 		cfg := <-cfgCh
 
-		sess.Tty = &SshTty{
+		tty := &SshTty{
 			Config:          cfg,
 			ReadWriteCloser: channel,
 		}
 
-		sess.Screen, err = NewIOScreenFromTty(sess.Tty, cfg)
+		fmt.Fprintf(channel, "\r\nConfiguring terminal: %+v\r\n\r\n", cfg)
+
+		log.Printf("creating screen with config: %+v", cfg)
+
+		scr, err := NewIOScreenFromTty(tty, cfg)
 		if err != nil {
 			log.Printf("error creating screen: %v", err)
 			return
 		}
+
+		if err := scr.Init(); err != nil {
+			log.Printf("error initializing screen: %v", err)
+			return
+		}
+
+		// !!! FIXME !!!
+		lobby := &Lobby{}
+
+		ui := setupUI(sess, lobby, systemLog)
+		sess.UI = ui
+		sess.Tty = tty
+		ui.App.SetScreen(scr)
 
 		/*
 			term := terminal.NewTerminal(channel, "> ")
@@ -179,9 +198,10 @@ func handleConnection(c net.Conn, cfg *ssh.ServerConfig) {
 			}()
 		*/
 
-		if err := sess.Run(); err != nil {
-			log.Printf("session error: %v", err)
+		if err := ui.App.Run(); err != nil {
+			log.Printf("session [%s : %p] error: %v", sess.User, sess, err)
 		}
+
 		return
 	}
 }

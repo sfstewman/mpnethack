@@ -1,14 +1,25 @@
 package main
 
-type Marker uint16
+import "fmt"
+
+const (
+	LevelWidth  = 128
+	LevelHeight = 128
+)
+
+type Marker uint32
 type MarkerArchetype uint8
 
-func NewMarker(ma MarkerArchetype, minst uint16) Marker {
-	return Marker((minst & 0x3fff) | ((uint16(ma) & 7) << 13))
+func NewMarker(ma MarkerArchetype, minst uint32) Marker {
+	return Marker((minst & 0xffffff) | (uint32(ma) << 24))
 }
 
 func (m Marker) Type() MarkerArchetype {
-	return MarkerArchetype(m >> 13)
+	return MarkerArchetype(m >> 24)
+}
+
+func (m Marker) Arg() uint32 {
+	return uint32(m) & 0xffffff
 }
 
 const (
@@ -18,60 +29,110 @@ const (
 	MarkerPortal
 	MarkerSpawner
 	MarkerDoor
+	MarkerMob
+	MarkerPlayer
 )
 
 const (
-	MarkerVoid  Marker = Marker(uint16(MarkerSpace)<<13 | 0)
-	MarkerEmpty Marker = Marker(uint16(MarkerSpace)<<13 | 1)
+	MarkerVoid  Marker = Marker(uint32(MarkerSpace)<<24 | 0)
+	MarkerEmpty Marker = Marker(uint32(MarkerSpace)<<24 | 1)
 
-	MarkerBorder Marker = Marker(uint16(MarkerBounds)<<13 | 0)
-	MarkerWall   Marker = Marker(uint16(MarkerBounds)<<13 | 1)
+	MarkerBorder Marker = Marker(uint32(MarkerBounds)<<24 | 0)
+	MarkerWall   Marker = Marker(uint32(MarkerBounds)<<24 | 1)
 )
 
+func (m Marker) Name() string {
+	switch m {
+	case MarkerVoid:
+		return "the void"
+	case MarkerEmpty:
+		return "empty space"
+	case MarkerBorder:
+		return "a border of the world"
+	case MarkerWall:
+		return "a wall"
+	}
+
+	var arch string
+	switch t := m.Type(); t {
+	case MarkerSpace:
+		arch = "space"
+	case MarkerBounds:
+		arch = "bounds"
+	case MarkerObject:
+		arch = "object"
+	case MarkerPortal:
+		arch = "portal"
+	case MarkerSpawner:
+		arch = "portal"
+	case MarkerDoor:
+		arch = "door"
+	case MarkerMob:
+		arch = "mob"
+	case MarkerPlayer:
+		arch = "player"
+	default:
+		arch = fmt.Sprintf("%v", t)
+	}
+
+	return fmt.Sprintf("%s_%d", arch, m.Arg())
+}
+
+func MobMarker(mobType MobType) Marker {
+	return NewMarker(MarkerMob, uint32(mobType))
+}
+
+type Board struct {
+	Elements []Marker
+	W, H     int
+}
+
 type Level struct {
-	W, H  int
-	Board []Marker
-
+	Board
 	Mobs []Mob
+
+	PlayerI0, PlayerJ0 int
 }
 
-func (lvl *Level) Set(i, j int, m Marker) {
-	ind := i*lvl.W + j
-	lvl.Board[ind] = m
+func (b *Board) Set(i, j int, m Marker) {
+	ind := i*b.W + j
+	b.Elements[ind] = m
 }
 
-func (lvl *Level) Get(i, j int) Marker {
-	ind := i*lvl.W + j
-	return lvl.Board[ind]
+func (b *Board) Get(i, j int) Marker {
+	ind := i*b.W + j
+	return b.Elements[ind]
 }
 
 func NewBoxLevel(w, h int) *Level {
 	l := &Level{
-		W: w,
-		H: h,
+		Board: Board{
+			Elements: make([]Marker, w*h),
+			W:        w,
+			H:        h,
+		},
 	}
 
-	l.Board = make([]Marker, w*h)
 	for j := 0; j < w; j++ {
-		l.Board[0*w+j] = MarkerBorder
-		l.Board[(h-1)*w+j] = MarkerBorder
+		l.Set(0, j, MarkerBorder)
+		l.Set(h-1, j, MarkerBorder)
 	}
 
 	for i := 1; i < h-1; i++ {
-		l.Board[i*w+0] = MarkerBorder
-		l.Board[i*w+w-1] = MarkerBorder
+		l.Set(i, 0, MarkerBorder)
+		l.Set(i, w-1, MarkerBorder)
 	}
 
 	for i := 1; i < h-1; i++ {
 		for j := 1; j < w-1; j++ {
-			l.Board[w*i+j] = MarkerEmpty
+			l.Set(i, j, MarkerEmpty)
 		}
 	}
 
 	return l
 }
 
-func SingleRoomLevel(width, height, roomWidth, roomHeight int) *Level {
+func SingleRoomLevel(height, width, roomHeight, roomWidth int) *Level {
 	levelWidth := width
 	levelHeight := height
 
@@ -93,9 +154,11 @@ func SingleRoomLevel(width, height, roomWidth, roomHeight int) *Level {
 	board := make([]Marker, npts)
 
 	lvl := &Level{
-		W:     levelWidth,
-		H:     levelHeight,
-		Board: board,
+		Board: Board{
+			Elements: board,
+			W:        width,
+			H:        height,
+		},
 	}
 
 	for i := 0; i < levelHeight; i++ {
@@ -113,4 +176,32 @@ func SingleRoomLevel(width, height, roomWidth, roomHeight int) *Level {
 	}
 
 	return lvl
+}
+
+func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc MoveDirection, args ...int16) {
+	info := LookupMobInfo(mobType)
+
+	var moveTick uint16
+	if info != nil {
+		moveTick = info.MoveTicks
+	}
+
+	m := Mob{
+		I:        i,
+		J:        j,
+		Stats:    stats,
+		Type:     mobType,
+		Direc:    direc,
+		MoveTick: moveTick,
+	}
+
+	for i := 0; i < len(args); i++ {
+		if i >= len(m.States) {
+			break
+		}
+
+		m.States[i] = args[i]
+	}
+
+	l.Mobs = append(l.Mobs, m)
 }

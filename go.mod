@@ -5,6 +5,7 @@ go 1.17
 require (
 	github.com/gdamore/tcell v1.4.0
 	github.com/rivo/tview v0.0.0-20220106183741-90d72bc664f5
+	go.etcd.io/bbolt v1.3.6
 	golang.org/x/crypto v0.0.0-20220112180741-5e0467b6c7ce
 	golang.org/x/text v0.3.7
 )
