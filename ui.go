@@ -10,6 +10,7 @@ import (
 	"github.com/sfstewman/mpnethack/chat"
 	"github.com/sfstewman/mpnethack/game"
 	"github.com/sfstewman/mpnethack/tui"
+	"github.com/sfstewman/mpnethack/tui/widgets"
 )
 
 type PageNumber int
@@ -27,7 +28,6 @@ const (
 )
 
 type UI struct {
-	// Logger  *log.Logger
 	Session *Session
 	Lobby   *game.Lobby
 
@@ -53,8 +53,7 @@ type UI struct {
 	PageNames map[string]tview.Primitive
 
 	AdminLog   *chat.Log
-	AdminInput *tui.InputArea
-	// LogView *LogView
+	AdminInput *widgets.InputArea
 
 	mu sync.Mutex
 }
@@ -210,7 +209,7 @@ func setupAdminPage(ui *UI, sysLog *SystemLog) {
 	})
 
 	ui.AdminLog = adminLog
-	ui.AdminInput = tui.NewInputArea(adminLog)
+	ui.AdminInput = widgets.NewInputArea(adminLog)
 
 	ui.AdminInput.DirectKeyFunc = func(e *tcell.EventKey) *tcell.EventKey {
 		k := e.Key()
@@ -581,7 +580,7 @@ func SetupUI(sess *Session, lobby *game.Lobby, sysLog *SystemLog) *UI {
 
 	itemView := tview.NewBox().SetBorder(true).SetTitle("Items")
 
-	inputArea := tui.NewInputArea(ui.Session.SessionLog)
+	inputArea := widgets.NewInputArea(ui.Session.SessionLog)
 	inputArea.DirectKeyFunc = ui.handleGameKeys
 	inputArea.ConsoleInputFunc = ui.Session.ConsoleInput
 	inputArea.SetBorder(true).SetTitle("Input")
@@ -595,7 +594,7 @@ func SetupUI(sess *Session, lobby *game.Lobby, sysLog *SystemLog) *UI {
 		ui.setModal(ModalMenu, false)
 	})
 
-	menuBox := tui.NewMenu("System menu", ui, func() {
+	menuBox := widgets.NewMenu("System menu", ui, func() {
 		ui.setModal(ModalMenu, false)
 	})
 	menuBox.AddButton("Resume", 'r', "resume")
@@ -611,8 +610,6 @@ func SetupUI(sess *Session, lobby *game.Lobby, sysLog *SystemLog) *UI {
 			SetDirection(tview.FlexRow).
 			AddItem(statusArea, 0, 2, false).
 			AddItem(itemView, 0, 1, false), 0, 1, false)
-
-	// statusArea, 0, 1, false)
 
 	if sess.IsAdministrator() {
 		setupAdminPage(ui, sysLog)
