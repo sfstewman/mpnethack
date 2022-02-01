@@ -127,6 +127,14 @@ const (
 	DefaultPlayerCol0 = LevelWidth / 4
 )
 
+type GameSession interface {
+	Game() *Game
+	Player() *Player
+	UserName() string
+
+	Message(chat.MsgLevel, string) error
+}
+
 type Namer interface {
 	Name() string
 }
@@ -563,13 +571,13 @@ func (g *Game) UserAction(s *Session, act ActionType, arg int16) error {
 	return nil
 }
 
-func (g *Game) handleAction(s *Session, act action) {
-	pl := s.Player
+func (g *Game) handleAction(s GameSession, act action) {
+	pl := s.Player()
 	if pl == nil {
 		return
 	}
 
-	user := s.User
+	user := s.UserName()
 	lvl := g.Level
 
 	switch act.Type {

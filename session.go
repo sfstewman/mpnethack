@@ -89,13 +89,25 @@ type Session struct {
 
 	UI *UI
 
-	G      *Game
-	Player *Player
+	G *Game
+	P *Player
 
 	SessionLog *chat.Log
 
 	State SessionState
 	Flags SessionFlag
+}
+
+func (s *Session) Game() *Game {
+	return s.G
+}
+
+func (s *Session) Player() *Player {
+	return s.P
+}
+
+func (s *Session) UserName() string {
+	return s.User
 }
 
 const SessionGameLogLines = 100
@@ -185,7 +197,7 @@ func (s *Session) Join(g *Game) error {
 		return err
 	}
 
-	s.Player = pl
+	s.P = pl
 
 	return nil
 }

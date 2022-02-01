@@ -17,17 +17,16 @@ type Actor interface {
 
 type MapArea struct {
 	*tview.Box
-	UI *UI
+	Session GameSession
 
 	first bool
 }
 
-func NewMapArea(ui *UI) *MapArea {
+func NewMapArea(session GameSession /* session *Session */ /* ui *UI */) *MapArea {
 	mapArea := &MapArea{
-		Box: tview.NewBox(),
-		UI:  ui,
-
-		first: true,
+		Box:     tview.NewBox(),
+		Session: session,
+		first:   true,
 	}
 
 	mapArea.SetBorder(true)
@@ -47,8 +46,8 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 
 	ctrY := y0 + h/2
 
-	session := m.UI.Session
-	g := session.G
+	session := m.Session
+	g := session.Game()
 
 	if g == nil {
 		tview.Print(screen, "[red:white]No game[-:-]", x0, ctrY, w, tview.AlignCenter, tcell.ColorDefault)
@@ -64,7 +63,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 	mobs := g.Mobs
 	effects := g.EffectsOverlay
 
-	pl := players[session.User]
+	pl := session.Player()
 	if pl.S == nil {
 		tview.Print(screen, "[red:white]No user[-:-]", x0, ctrY, w, tview.AlignCenter, tcell.ColorDefault)
 		return
@@ -819,7 +818,7 @@ func SetupUI(sess *Session, lobby *Lobby, sysLog *SystemLog) *UI {
 	lobbyScr := NewLobbyScreen(ui)
 	ui.LobbyView = lobbyScr
 
-	mapArea := NewMapArea(ui)
+	mapArea := NewMapArea(sess)
 	statusArea := NewStatusFrame(ui)
 	statusArea.SetBorder(true).SetTitle("Status")
 
