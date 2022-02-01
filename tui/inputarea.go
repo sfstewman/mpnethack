@@ -23,8 +23,6 @@ type InputArea struct {
 
 	InputMode InputMode
 
-	// UI *UI
-
 	DirectKeyFunc    func(e *tcell.EventKey) *tcell.EventKey
 	ConsoleInputFunc func(string)
 
@@ -34,11 +32,10 @@ type InputArea struct {
 	HasLastKey bool
 }
 
-func NewInputArea( /* ui *UI, */ gl *chat.Log) *InputArea {
+func NewInputArea(gl *chat.Log) *InputArea {
 	inp := &InputArea{
-		Flex:      tview.NewFlex(),
-		InputMode: InputGame,
-		// UI:         ui,
+		Flex:       tview.NewFlex(),
+		InputMode:  InputGame,
 		HasLastKey: false,
 	}
 
@@ -49,7 +46,6 @@ func NewInputArea( /* ui *UI, */ gl *chat.Log) *InputArea {
 
 	inp.Input.SetInputCapture(inp.handleInput)
 
-	// inp.Log = NewLogView(ui.Session.SessionLog)
 	inp.Log = NewLogView(gl)
 
 	inp.SetDirection(tview.FlexRow).
@@ -58,7 +54,6 @@ func NewInputArea( /* ui *UI, */ gl *chat.Log) *InputArea {
 
 	inp.SetBorderPadding(1, 1, 1, 1)
 
-	// inp.SetInputCapture(inp.handleInput)
 	inp.Input.SetInputCapture(inp.handleInput)
 
 	return inp
@@ -114,13 +109,6 @@ func (inp *InputArea) handleInput(e *tcell.EventKey) *tcell.EventKey {
 			m = e.Modifiers()
 			r = e.Rune()
 		}
-
-		/*
-			if k == tcell.KeyEsc && m == tcell.ModNone {
-				// bring up menu
-				inp.UI.toggleModal(ModalMenu)
-			}
-		*/
 
 		if k == tcell.KeyPgUp {
 			inp.Log.Scroll(ScrollUp)
