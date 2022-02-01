@@ -1,4 +1,4 @@
-package uilib
+package tui
 
 import (
 	"fmt"

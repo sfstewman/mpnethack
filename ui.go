@@ -8,7 +8,7 @@ import (
 	tcell "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/sfstewman/mpnethack/chat"
-	"github.com/sfstewman/mpnethack/uilib"
+	"github.com/sfstewman/mpnethack/tui"
 )
 
 type Actor interface {
@@ -297,7 +297,7 @@ type UI struct {
 	PageNames map[string]tview.Primitive
 
 	AdminLog   *chat.Log
-	AdminInput *uilib.InputArea
+	AdminInput *tui.InputArea
 	// LogView *LogView
 
 	mu sync.Mutex
@@ -454,7 +454,7 @@ func setupAdminPage(ui *UI, sysLog *SystemLog) {
 	})
 
 	ui.AdminLog = adminLog
-	ui.AdminInput = uilib.NewInputArea(adminLog)
+	ui.AdminInput = tui.NewInputArea(adminLog)
 
 	ui.AdminInput.DirectKeyFunc = func(e *tcell.EventKey) *tcell.EventKey {
 		k := e.Key()
@@ -825,7 +825,7 @@ func SetupUI(sess *Session, lobby *Lobby, sysLog *SystemLog) *UI {
 
 	itemView := tview.NewBox().SetBorder(true).SetTitle("Items")
 
-	inputArea := uilib.NewInputArea(ui.Session.SessionLog)
+	inputArea := tui.NewInputArea(ui.Session.SessionLog)
 	inputArea.DirectKeyFunc = ui.handleGameKeys
 	inputArea.ConsoleInputFunc = ui.Session.ConsoleInput
 	inputArea.SetBorder(true).SetTitle("Input")
