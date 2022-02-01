@@ -5,7 +5,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/sfstewman/mpnethack/util"
+	"github.com/sfstewman/mpnethack/chat"
 )
 
 type InputMode int
@@ -34,7 +34,7 @@ type InputArea struct {
 	HasLastKey bool
 }
 
-func NewInputArea( /* ui *UI, */ gl *util.GameLog) *InputArea {
+func NewInputArea( /* ui *UI, */ gl *chat.Log) *InputArea {
 	inp := &InputArea{
 		Flex:      tview.NewFlex(),
 		InputMode: InputGame,

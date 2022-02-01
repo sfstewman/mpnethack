@@ -6,13 +6,13 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/sfstewman/mpnethack/util"
+	"github.com/sfstewman/mpnethack/chat"
 )
 
 type LogView struct {
 	*tview.TextView
 
-	Log *util.GameLog
+	Log *chat.Log
 
 	Offset int
 
@@ -23,10 +23,10 @@ type LogView struct {
 const LogTimeLayout = "2006/01/02 03:04:05 MST"
 
 func NewLogViewWithLines(numLines int) *LogView {
-	return NewLogView(util.NewGameLog(numLines))
+	return NewLogView(chat.NewLog(numLines))
 }
 
-func NewLogView(gl *util.GameLog) *LogView {
+func NewLogView(gl *chat.Log) *LogView {
 	txtView := tview.NewTextView().SetDynamicColors(true)
 
 	v := &LogView{
@@ -105,7 +105,7 @@ func (v *LogView) redrawLog() {
 	first := true
 	var minSeq, maxSeq uint
 	var minCnt, maxCnt int
-	v.Log.VisitLines(0, func(msg util.LogMessage) bool {
+	v.Log.VisitLines(0, func(msg chat.Message) bool {
 		if first || msg.Seq < minSeq {
 			minSeq = msg.Seq
 			minCnt = count
@@ -126,7 +126,7 @@ func (v *LogView) redrawLog() {
 	}
 
 	lineCount := 0
-	v.Log.VisitLines(off, func(msg util.LogMessage) bool {
+	v.Log.VisitLines(off, func(msg chat.Message) bool {
 		s := v.formatMessage(msg)
 		fmt.Fprint(wr, s)
 		lineCount++
@@ -143,25 +143,25 @@ func (v *LogView) Draw(scr tcell.Screen) {
 	v.TextView.Draw(scr)
 }
 
-func (v *LogView) formatMessage(msg util.LogMessage) string {
+func (v *LogView) formatMessage(msg chat.Message) string {
 	var btag, etag, sfx string
 
 	etag = "[-:-:-]"
 	switch msg.Level {
-	case util.MsgDebug:
+	case chat.Debug:
 		btag = "[gray:black]"
-	case util.MsgInfo:
+	case chat.Info:
 		btag = ""
 		etag = ""
-	case util.MsgChat:
+	case chat.Chat:
 		btag = "[blue:black]"
-	case util.MsgPrivate:
+	case chat.Private:
 		btag = "[pink:black]"
-	case util.MsgGame:
+	case chat.Game:
 		btag = "[green:black]"
-	case util.MsgAdmin:
+	case chat.Admin:
 		btag = "[red:black:b]"
-	case util.MsgSystem:
+	case chat.System:
 		btag = "[yellow:black:b]"
 	}
 
@@ -175,6 +175,6 @@ func (v *LogView) formatMessage(msg util.LogMessage) string {
 	return fmt.Sprintf("%s%s [%d] %s%s%s", btag, timeStr, msg.Seq, tview.Escape(line), etag, sfx)
 }
 
-func (v *LogView) AddLine(lvl util.MsgLevel, line string) {
+func (v *LogView) AddLine(lvl chat.MsgLevel, line string) {
 	v.Log.LogLine(lvl, line)
 }

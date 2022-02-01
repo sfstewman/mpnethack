@@ -7,8 +7,8 @@ import (
 
 	tcell "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/sfstewman/mpnethack/chat"
 	"github.com/sfstewman/mpnethack/uilib"
-	"github.com/sfstewman/mpnethack/util"
 )
 
 type Actor interface {
@@ -139,10 +139,10 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 	}
 
 	if m.first {
-		session.Message(util.MsgSystem, fmt.Sprintf("[%d,%d,%d,%d] pl=(%d,%d) delta=(%d,%d) lvl0=(%d,%d) lvl1=(%d,%d), scr0=(%d,%d)",
+		session.Message(chat.System, fmt.Sprintf("[%d,%d,%d,%d] pl=(%d,%d) delta=(%d,%d) lvl0=(%d,%d) lvl1=(%d,%d), scr0=(%d,%d)",
 			x0, y0, w, h, plJ, plI, deltaJ, deltaI, lvlJ0, lvlI0, lvlJ1, lvlI1, lvlJ0+x0-deltaJ, lvlI0+y0-deltaI))
 
-		session.Message(util.MsgSystem, fmt.Sprintf("void: %d, empty: %d, border: %d, wall: %d, size: %d",
+		session.Message(chat.System, fmt.Sprintf("void: %d, empty: %d, border: %d, wall: %d, size: %d",
 			numVoid, numEmpty, numBorder, numWall, size))
 	}
 
@@ -163,7 +163,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		}
 
 		if m.first {
-			session.Message(util.MsgSystem, fmt.Sprintf("player (%d,%d) x=%d, y=%d, marker=\"%c\"",
+			session.Message(chat.System, fmt.Sprintf("player (%d,%d) x=%d, y=%d, marker=\"%c\"",
 				pl.J, pl.I, x, y, ch))
 		}
 	}
@@ -186,7 +186,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		}
 
 		if m.first {
-			session.Message(util.MsgSystem, fmt.Sprintf("mob %s (%d,%d) x=%d, y=%d, marker=\"%c\"",
+			session.Message(chat.System, fmt.Sprintf("mob %s (%d,%d) x=%d, y=%d, marker=\"%c\"",
 				mobInfo.Name, mob.J, mob.I, x, y, ch))
 		}
 	}
@@ -296,7 +296,7 @@ type UI struct {
 	Actions   map[string]func()
 	PageNames map[string]tview.Primitive
 
-	AdminLog   *util.GameLog
+	AdminLog   *chat.Log
 	AdminInput *uilib.InputArea
 	// LogView *LogView
 
@@ -448,9 +448,9 @@ func setupAdminPage(ui *UI, sysLog *SystemLog) {
 		main.AddPage("logs", logFrame, true, true)
 	*/
 
-	adminLog := util.NewGameLog(1000)
+	adminLog := chat.NewLog(1000)
 	sysLog.SetCallback(func(line string) {
-		adminLog.LogLine(util.MsgSystem, line)
+		adminLog.LogLine(chat.System, line)
 	})
 
 	ui.AdminLog = adminLog

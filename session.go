@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/sfstewman/mpnethack/util"
+	"github.com/sfstewman/mpnethack/chat"
 )
 
 type SessionState int
@@ -92,7 +92,7 @@ type Session struct {
 	G      *Game
 	Player *Player
 
-	SessionLog *util.GameLog
+	SessionLog *chat.Log
 
 	State SessionState
 	Flags SessionFlag
@@ -103,7 +103,7 @@ const SessionGameLogLines = 100
 func NewSession(user string, flags SessionFlag) *Session {
 	s := &Session{
 		User:       user,
-		SessionLog: util.NewGameLog(SessionGameLogLines),
+		SessionLog: chat.NewLog(SessionGameLogLines),
 		Flags:      flags,
 	}
 
@@ -118,7 +118,7 @@ func (s *Session) HasGame() bool {
 	return s.G != nil
 }
 
-func (s *Session) Message(lvl util.MsgLevel, msg string) error {
+func (s *Session) Message(lvl chat.MsgLevel, msg string) error {
 	s.SessionLog.LogLine(lvl, msg)
 	// err := s.GV.Message(l, msg)
 	// s.Update()
@@ -170,7 +170,7 @@ func (s *Session) ConsoleInput(txt string) {
 	case txt[0] == '/':
 		s.G.Command(s, txt)
 	default:
-		s.G.Input(util.MsgChat, s, txt)
+		s.G.Input(chat.Chat, s, txt)
 	}
 }
 

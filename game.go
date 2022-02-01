@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/sfstewman/mpnethack/util"
+	"github.com/sfstewman/mpnethack/chat"
 )
 
 var (
@@ -299,7 +299,7 @@ type Game struct {
 	RNG *rand.Rand
 
 	Active   []*Session
-	GameLog  *util.GameLog
+	GameLog  *chat.Log
 	FrameNum uint64
 
 	cooldowns map[*Session][]uint64
@@ -390,7 +390,7 @@ func NewGame(l *Level) (*Game, error) {
 
 		RNG: rng,
 
-		GameLog: util.NewGameLog(GameLogNumLines),
+		GameLog: chat.NewLog(GameLogNumLines),
 
 		cooldowns: make(map[*Session][]uint64),
 		actions:   make(map[*Session]action),
@@ -485,7 +485,7 @@ func (g *Game) PlayerJoin(sess *Session) (*Player, error) {
 	g.Markers[marker] = pl
 
 	g.Active = append(g.Active, sess)
-	g.messagef(util.MsgInfo, "%s (%c) joined the game!", sess.User, marker)
+	g.messagef(chat.Info, "%s (%c) joined the game!", sess.User, marker)
 
 	return pl, nil
 }
@@ -508,7 +508,7 @@ func (g *Game) PlayerLeave(sess *Session) {
 		}
 	}
 
-	g.Messagef(util.MsgInfo, "%s left the game!", sess.User)
+	g.Messagef(chat.Info, "%s left the game!", sess.User)
 }
 
 func (g *Game) Shutdown() {
@@ -614,7 +614,7 @@ func (g *Game) handleAction(s *Session, act action) {
 		}
 
 		if what := g.hasCollision(newI, newJ); what != nil {
-			g.messagef(util.MsgGame, "%s tried to move %s but hit a %s", user, dir, what.Name())
+			g.messagef(chat.Game, "%s tried to move %s but hit a %s", user, dir, what.Name())
 		} else {
 			pl.I = newI
 			pl.J = newJ
@@ -633,7 +633,7 @@ func (g *Game) handleAction(s *Session, act action) {
 			pl.SwingFacing = facing
 		}
 	case Defend:
-		g.messagef(util.MsgGame, "%s is defending", user)
+		g.messagef(chat.Game, "%s is defending", user)
 	}
 }
 
@@ -786,15 +786,15 @@ func (g *Game) loopInner() {
 						toHit := pl.GetStats().ToHit(obj.GetStats())
 						if rollD20(g.RNG) <= toHit {
 							dmg := rollMdN(g.RNG, 2, 4)
-							g.messagef(util.MsgGame, "%s slashes %s with his rusty sword for %d damage", pl.Name(), coll.Name(), dmg)
+							g.messagef(chat.Game, "%s slashes %s with his rusty sword for %d damage", pl.Name(), coll.Name(), dmg)
 						} else {
-							g.messagef(util.MsgGame, "%s swings wildy at %s but misses", pl.Name(), coll.Name())
+							g.messagef(chat.Game, "%s swings wildy at %s but misses", pl.Name(), coll.Name())
 						}
 					case Marker:
-						g.messagef(util.MsgGame, "%s slashes at the %s.  Thankfully this sword can't get any less sharp.", pl.Name(), coll.Name())
+						g.messagef(chat.Game, "%s slashes at the %s.  Thankfully this sword can't get any less sharp.", pl.Name(), coll.Name())
 					case *Player:
 						_ = obj
-						g.messagef(util.MsgGame, "The sword of %s collides with %s, who looks very miffed.", pl.Name(), coll.Name())
+						g.messagef(chat.Game, "The sword of %s collides with %s, who looks very miffed.", pl.Name(), coll.Name())
 					}
 				}
 
@@ -846,7 +846,7 @@ func (g *Game) Loop() {
 	doneCh := g.Ctx.Done()
 	updCh := g.pump.C
 
-	g.Message(util.MsgInfo, "Welcome!")
+	g.Message(chat.Info, "Welcome!")
 
 GameLoop:
 	for {
@@ -876,29 +876,29 @@ func (g *Game) Command(sess *Session, txt string) error {
 	}
 }
 
-func (g *Game) Input(l util.MsgLevel, sess *Session, txt string) error {
+func (g *Game) Input(l chat.MsgLevel, sess *Session, txt string) error {
 	return g.Message(l, txt)
 }
 
-func (g *Game) Messagef(l util.MsgLevel, fmtStr string, args ...interface{}) error {
+func (g *Game) Messagef(l chat.MsgLevel, fmtStr string, args ...interface{}) error {
 	s := fmt.Sprintf(fmtStr, args...)
 	return g.Message(l, s)
 }
 
-func (g *Game) Message(l util.MsgLevel, s string) error {
+func (g *Game) Message(l chat.MsgLevel, s string) error {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	return g.message(l, s)
 }
 
-func (g *Game) messagef(l util.MsgLevel, fmtStr string, args ...interface{}) error {
+func (g *Game) messagef(l chat.MsgLevel, fmtStr string, args ...interface{}) error {
 	s := fmt.Sprintf(fmtStr, args...)
 	return g.message(l, s)
 }
 
 // Assumes lock is held (either read or write)
-func (g *Game) message(lvl util.MsgLevel, s string) error {
+func (g *Game) message(lvl chat.MsgLevel, s string) error {
 	// XXX: global game log
 	var errs []error
 	for _, sess := range g.Active {
