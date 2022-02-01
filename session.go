@@ -9,6 +9,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/sfstewman/mpnethack/chat"
+	"github.com/sfstewman/mpnethack/game"
 )
 
 type SessionState int
@@ -89,8 +90,8 @@ type Session struct {
 
 	UI *UI
 
-	G *Game
-	P *Player
+	G *game.Game
+	P *game.Player
 
 	SessionLog *chat.Log
 
@@ -98,11 +99,11 @@ type Session struct {
 	Flags SessionFlag
 }
 
-func (s *Session) Game() *Game {
+func (s *Session) Game() *game.Game {
 	return s.G
 }
 
-func (s *Session) Player() *Player {
+func (s *Session) Player() *game.Player {
 	return s.P
 }
 
@@ -162,16 +163,16 @@ func (s *Session) Quit() {
 	s.UI.Quit()
 }
 
-func (s *Session) Move(direc MoveDirection) {
-	s.G.UserAction(s, Move, int16(direc))
+func (s *Session) Move(direc game.Direction) {
+	s.G.UserAction(s, game.Move, int16(direc))
 }
 
 func (s *Session) Attack() {
-	s.G.UserAction(s, Attack, 0)
+	s.G.UserAction(s, game.Attack, 0)
 }
 
 func (s *Session) Defend() {
-	s.G.UserAction(s, Defend, 0)
+	s.G.UserAction(s, game.Defend, 0)
 }
 
 func (s *Session) ConsoleInput(txt string) {
@@ -182,11 +183,11 @@ func (s *Session) ConsoleInput(txt string) {
 	case txt[0] == '/':
 		s.G.Command(s, txt)
 	default:
-		s.G.Input(chat.Chat, s, txt)
+		s.G.Input(chat.Chat, txt)
 	}
 }
 
-func (s *Session) Join(g *Game) error {
+func (s *Session) Join(g *game.Game) error {
 	if s.G != nil {
 		return fmt.Errorf("game is nil")
 	}

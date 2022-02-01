@@ -1,17 +1,17 @@
-package mpnethack
+package game
 
 import "sync"
 
 type Lobby struct {
-	Sessions []*Session
+	Sessions []Session
 	Games    []*Game
 
 	mu sync.Mutex
 }
 
-func (l *Lobby) NewGame(sess *Session) (*Game, error) {
-	if sess.G != nil {
-		return sess.G, nil
+func (l *Lobby) NewGame(sess Session) (*Game, error) {
+	if g := sess.Game(); g != nil {
+		return g, nil
 	}
 
 	lvl := SingleRoomLevel(64, 128, 32, 64)
@@ -31,12 +31,12 @@ func (l *Lobby) NewGame(sess *Session) (*Game, error) {
 		HP:         14,
 	}
 
-	lvl.AddMob(MobLemming, lemmingStats, 18, 34, MoveDown)
-	lvl.AddMob(MobLemming, lemmingStats, 18, 45, MoveRight)
-	lvl.AddMob(MobLemming, lemmingStats, 45, 92, MoveUp)
-	lvl.AddMob(MobViciousLemming, viciousLemmingStats, 18, 92, MoveLeft)
+	lvl.AddMob(MobLemming, lemmingStats, 18, 34, Down)
+	lvl.AddMob(MobLemming, lemmingStats, 18, 45, Right)
+	lvl.AddMob(MobLemming, lemmingStats, 45, 92, Up)
+	lvl.AddMob(MobViciousLemming, viciousLemmingStats, 18, 92, Left)
 
-	lvl.AddMob(MobViciousLemming, viciousLemmingStats, lvl.PlayerI0, lvl.PlayerJ0+3, MoveNone)
+	lvl.AddMob(MobViciousLemming, viciousLemmingStats, lvl.PlayerI0, lvl.PlayerJ0+3, NoDirection)
 
 	g, err := NewGame(lvl)
 	if err != nil {
@@ -62,7 +62,7 @@ func (l *Lobby) NewGame(sess *Session) (*Game, error) {
 	return g, nil
 }
 
-func (l *Lobby) AddSession(sess *Session) {
+func (l *Lobby) AddSession(sess Session) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

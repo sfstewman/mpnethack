@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/sfstewman/mpnethack"
+	"github.com/sfstewman/mpnethack/game"
 )
 
 const ConsoleFlags = mpnethack.Authenticated | mpnethack.Administrator
@@ -26,7 +27,7 @@ func main() {
 		return
 	}
 
-	lobby := &mpnethack.Lobby{}
+	lobby := &game.Lobby{}
 
 	session := mpnethack.NewSession("Asron the Limited", ConsoleFlags)
 	lobby.AddSession(session)

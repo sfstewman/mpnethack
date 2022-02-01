@@ -1,4 +1,4 @@
-package mpnethack
+package game
 
 import "fmt"
 
@@ -178,7 +178,7 @@ func SingleRoomLevel(height, width, roomHeight, roomWidth int) *Level {
 	return lvl
 }
 
-func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc MoveDirection, args ...int16) {
+func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc Direction, args ...int16) {
 	info := LookupMobInfo(mobType)
 
 	var moveTick uint16

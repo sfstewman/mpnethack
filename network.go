@@ -7,13 +7,15 @@ import (
 	"net"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/sfstewman/mpnethack/game"
 )
 
 func authLog(conn ssh.ConnMetadata, method string, err error) {
 	log.Printf("login attempt[%s] %v : %v\n", method, conn, err)
 }
 
-func AcceptNetworkLogins(hostKeyPath string, lobby *Lobby, systemLog *SystemLog) {
+func AcceptNetworkLogins(hostKeyPath string, lobby *game.Lobby, systemLog *SystemLog) {
 	cfg := &ssh.ServerConfig{
 		NoClientAuth:    true,
 		AuthLogCallback: authLog,
@@ -117,7 +119,7 @@ func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- IOScree
 	}
 }
 
-func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *Lobby, systemLog *SystemLog) {
+func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *game.Lobby, systemLog *SystemLog) {
 	conn, chans, reqs, err := ssh.NewServerConn(c, cfg)
 	if err != nil {
 		log.Printf("failed to handshake: %v", err)
@@ -169,7 +171,7 @@ func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *Lobby, systemLog
 		}
 
 		// !!! FIXME !!!
-		lobby := &Lobby{}
+		lobby := &game.Lobby{}
 
 		ui := SetupUI(sess, lobby, systemLog)
 		sess.UI = ui

@@ -1,4 +1,4 @@
-package mpnethack
+package game
 
 import (
 	"context"
@@ -51,31 +51,31 @@ func (act ActionType) String() string {
 	}
 }
 
-type MoveDirection int16
+type Direction int16
 
 const (
-	MoveNone MoveDirection = iota
-	MoveLeft
-	MoveRight
-	MoveUp
-	MoveDown
+	NoDirection Direction = iota
+	Left
+	Right
+	Up
+	Down
 )
 
-func (direc MoveDirection) Name() string {
+func (direc Direction) Name() string {
 	switch direc {
-	case MoveNone:
+	case NoDirection:
 		return "none"
-	case MoveLeft:
+	case Left:
 		return "left"
-	case MoveRight:
+	case Right:
 		return "right"
-	case MoveUp:
+	case Up:
 		return "up"
-	case MoveDown:
+	case Down:
 		return "down"
 	}
 
-	return fmt.Sprintf("MoveDirection[%d]", direc)
+	return fmt.Sprintf("Direction[%d]", direc)
 }
 
 var UserActionCooldownTicks = [MaxActionType]uint64{
@@ -113,7 +113,7 @@ func calcCooldowns(now uint64, last []uint64, cd Cooldowns) Cooldowns {
 }
 
 type actionKey struct {
-	sess *Session
+	sess Session
 	act  ActionType
 }
 
@@ -127,12 +127,16 @@ const (
 	DefaultPlayerCol0 = LevelWidth / 4
 )
 
-type GameSession interface {
+type Session interface {
 	Game() *Game
 	Player() *Player
 	UserName() string
 
 	Message(chat.MsgLevel, string) error
+
+	Join(g *Game) error
+	Update() error
+	Quit()
 }
 
 type Namer interface {
@@ -209,7 +213,7 @@ type Mob struct {
 
 	ActionTick [4]uint16
 
-	Direc  MoveDirection
+	Direc  Direction
 	States [5]int16
 }
 
@@ -254,17 +258,19 @@ func (m *Mob) GetPos() (i int, j int, h int, w int) {
 }
 
 type Player struct {
-	S      *Session
+	S      Session
 	I, J   int
 	Marker rune
-	Facing MoveDirection
+	Facing Direction
+
+	Cooldowns []uint64
 
 	Stats UnitStats
 
 	SwingRate   uint16
 	SwingTick   uint16
 	SwingState  uint16
-	SwingFacing MoveDirection
+	SwingFacing Direction
 }
 
 func (p *Player) GetStats() *UnitStats {
@@ -272,7 +278,7 @@ func (p *Player) GetStats() *UnitStats {
 }
 
 func (p *Player) Name() string {
-	return p.S.User
+	return p.S.UserName()
 }
 
 func (p *Player) GetMarker() rune {
@@ -306,12 +312,11 @@ type Game struct {
 
 	RNG *rand.Rand
 
-	Active   []*Session
+	Active   []Session
 	GameLog  *chat.Log
 	FrameNum uint64
 
-	cooldowns map[*Session][]uint64
-	actions   map[*Session]action
+	actions map[Session]action
 
 	Level   *Level
 	Players map[string]*Player
@@ -321,6 +326,22 @@ type Game struct {
 	EffectsOverlay []Effect
 
 	Cancel context.CancelFunc
+}
+
+func (g *Game) Lock() {
+	g.mu.Lock()
+}
+
+func (g *Game) Unlock() {
+	g.mu.Unlock()
+}
+
+func (g *Game) RLock() {
+	g.mu.RLock()
+}
+
+func (g *Game) RUnlock() {
+	g.mu.RUnlock()
 }
 
 func (g *Game) hasCollision(newI, newJ int) Namer {
@@ -400,8 +421,8 @@ func NewGame(l *Level) (*Game, error) {
 
 		GameLog: chat.NewLog(GameLogNumLines),
 
-		cooldowns: make(map[*Session][]uint64),
-		actions:   make(map[*Session]action),
+		// cooldowns: make(map[*Session][]uint64),
+		actions: make(map[Session]action),
 
 		Level:   l, // NewBoxLevel(LevelWidth, LevelHeight),
 		Players: make(map[string]*Player),
@@ -464,14 +485,16 @@ func (g *Game) pickMarker(user string) (rune, error) {
 	return 0, ErrNoFreeMarkers
 }
 
-func (g *Game) PlayerJoin(sess *Session) (*Player, error) {
+func (g *Game) PlayerJoin(sess Session) (*Player, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
 	// i0 := DefaultPlayerRow
 	// j0 := DefaultPlayerCol0
 
-	marker, err := g.pickMarker(sess.User)
+	name := sess.UserName()
+
+	marker, err := g.pickMarker(name)
 	if err != nil {
 		return nil, err
 	}
@@ -481,7 +504,7 @@ func (g *Game) PlayerJoin(sess *Session) (*Player, error) {
 		J:      g.Level.PlayerJ0, // j0,
 		Marker: marker,
 		S:      sess,
-		Facing: MoveUp,
+		Facing: Up,
 		Stats: UnitStats{
 			ArmorClass: 10,
 			THAC0:      0,
@@ -489,25 +512,27 @@ func (g *Game) PlayerJoin(sess *Session) (*Player, error) {
 		},
 	}
 
-	g.Players[sess.User] = pl
+	g.Players[name] = pl
 	g.Markers[marker] = pl
 
 	g.Active = append(g.Active, sess)
-	g.messagef(chat.Info, "%s (%c) joined the game!", sess.User, marker)
+	g.messagef(chat.Info, "%s (%c) joined the game!", name, marker)
 
 	return pl, nil
 }
 
-func (g *Game) PlayerLeave(sess *Session) {
+func (g *Game) PlayerLeave(sess Session) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	pl := g.Players[sess.User]
+	pl := sess.Player()
+	name := sess.UserName()
 	if pl.S != sess {
 		return
 	}
 
-	delete(g.Players, sess.User)
+	// delete(g.Players, sess.User)
+	delete(g.Players, name)
 
 	for i, activeSess := range g.Active {
 		if activeSess == sess {
@@ -516,17 +541,19 @@ func (g *Game) PlayerLeave(sess *Session) {
 		}
 	}
 
-	g.Messagef(chat.Info, "%s left the game!", sess.User)
+	g.Messagef(chat.Info, "%s left the game!", name)
 }
 
 func (g *Game) Shutdown() {
 	g.pump.Stop()
 }
 
-func (g *Game) GetCooldowns(s *Session, cds Cooldowns) Cooldowns {
+func (g *Game) GetCooldowns(s Session, cds Cooldowns) Cooldowns {
+	pl := s.Player()
+	last := pl.Cooldowns
+
 	now := g.FrameNum
-	last, ok := g.cooldowns[s]
-	if !ok {
+	if len(last) == 0 {
 		if cds == nil {
 			return make(Cooldowns, len(zeroCooldowns))
 		}
@@ -538,7 +565,7 @@ func (g *Game) GetCooldowns(s *Session, cds Cooldowns) Cooldowns {
 	return calcCooldowns(now, last, cds)
 }
 
-func (g *Game) UserAction(s *Session, act ActionType, arg int16) error {
+func (g *Game) UserAction(s Session, act ActionType, arg int16) error {
 	if int(act) >= len(UserActionCooldownTicks) {
 		return InvalidCooldownError
 	}
@@ -550,10 +577,12 @@ func (g *Game) UserAction(s *Session, act ActionType, arg int16) error {
 
 	now := g.FrameNum
 
-	actionCDs, ok := g.cooldowns[s]
-	if !ok {
+	pl := s.Player()
+	actionCDs := pl.Cooldowns
+
+	if len(actionCDs) == 0 {
 		actionCDs = make([]uint64, len(UserActionCooldownTicks))
-		g.cooldowns[s] = actionCDs
+		pl.Cooldowns = actionCDs
 	}
 
 	last := actionCDs[act]
@@ -571,7 +600,7 @@ func (g *Game) UserAction(s *Session, act ActionType, arg int16) error {
 	return nil
 }
 
-func (g *Game) handleAction(s GameSession, act action) {
+func (g *Game) handleAction(s Session, act action) {
 	pl := s.Player()
 	if pl == nil {
 		return
@@ -586,18 +615,18 @@ func (g *Game) handleAction(s GameSession, act action) {
 		dj := 0
 		dir := "<unknown>"
 
-		direc := MoveDirection(act.Arg)
+		direc := Direction(act.Arg)
 		switch direc {
-		case MoveLeft:
+		case Left:
 			dir = "left"
 			dj = -1
-		case MoveRight:
+		case Right:
 			dir = "right"
 			dj = 1
-		case MoveUp:
+		case Up:
 			dir = "up"
 			di = -1
-		case MoveDown:
+		case Down:
 			dir = "down"
 			di = 1
 		}
@@ -632,7 +661,7 @@ func (g *Game) handleAction(s GameSession, act action) {
 
 	case Attack:
 		switch facing := pl.Facing; facing {
-		case MoveUp, MoveDown, MoveLeft, MoveRight:
+		case Up, Down, Left, Right:
 			// g.messagef(MsgGame, "%s swings weapon %s", user, facing.Name())
 
 			pl.SwingRate = 3
@@ -680,20 +709,20 @@ func (g *Game) loopInner() {
 			mob.MoveTick = mobInfo.MoveTicks
 
 			var di, dj int
-			var mirror MoveDirection = MoveNone
+			var mirror Direction = NoDirection
 			switch mob.Direc {
-			case MoveUp:
+			case Up:
 				di, dj = -1, 0
-				mirror = MoveDown
-			case MoveDown:
+				mirror = Down
+			case Down:
 				di, dj = 1, 0
-				mirror = MoveUp
-			case MoveLeft:
+				mirror = Up
+			case Left:
 				di, dj = 0, -1
-				mirror = MoveRight
-			case MoveRight:
+				mirror = Right
+			case Right:
 				di, dj = 0, 1
-				mirror = MoveLeft
+				mirror = Left
 			}
 
 			i1 := mob.I + di
@@ -731,7 +760,7 @@ func (g *Game) loopInner() {
 
 	// player actions
 	for _, pl := range g.Players {
-		if pl.SwingState > 0 && pl.SwingFacing != MoveNone {
+		if pl.SwingState > 0 && pl.SwingFacing != NoDirection {
 			pl.SwingTick--
 			if pl.SwingTick == 0 {
 				pl.SwingState--
@@ -739,16 +768,16 @@ func (g *Game) loopInner() {
 
 			var ui, uj, vi, vj int
 			switch pl.SwingFacing {
-			case MoveUp:
+			case Up:
 				ui, uj = -1, 0
 				vi, vj = 0, 1
-			case MoveDown:
+			case Down:
 				ui, uj = 1, 0
 				vi, vj = 0, -1
-			case MoveLeft:
+			case Left:
 				ui, uj = 0, -1
 				vi, vj = -1, 0
-			case MoveRight:
+			case Right:
 				ui, uj = 0, 1
 				vi, vj = 1, 0
 			}
@@ -765,7 +794,7 @@ func (g *Game) loopInner() {
 			case 0:
 				pl.SwingRate = 0
 				pl.SwingTick = 0
-				pl.SwingFacing = MoveNone
+				pl.SwingFacing = NoDirection
 			}
 
 			var swordRune rune
@@ -833,11 +862,11 @@ func (g *Game) loopInner() {
 }
 
 func (g *Game) sendUpdate() {
-	active := (func() []*Session {
+	active := (func() []Session {
 		g.mu.RLock()
 		defer g.mu.RUnlock()
 
-		active := make([]*Session, len(g.Active))
+		active := make([]Session, len(g.Active))
 		copy(active, g.Active)
 
 		return active
@@ -872,7 +901,7 @@ GameLoop:
 	}
 }
 
-func (g *Game) Command(sess *Session, txt string) error {
+func (g *Game) Command(sess Session, txt string) error {
 	switch {
 	case txt == "/quit":
 		sess.Quit()
@@ -884,7 +913,7 @@ func (g *Game) Command(sess *Session, txt string) error {
 	}
 }
 
-func (g *Game) Input(l chat.MsgLevel, sess *Session, txt string) error {
+func (g *Game) Input(l chat.MsgLevel, txt string) error {
 	return g.Message(l, txt)
 }
 

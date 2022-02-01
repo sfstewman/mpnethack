@@ -8,6 +8,7 @@ import (
 	tcell "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/sfstewman/mpnethack/chat"
+	"github.com/sfstewman/mpnethack/game"
 	"github.com/sfstewman/mpnethack/tui"
 )
 
@@ -17,12 +18,12 @@ type Actor interface {
 
 type MapArea struct {
 	*tview.Box
-	Session GameSession
+	Session game.Session
 
 	first bool
 }
 
-func NewMapArea(session GameSession /* session *Session */ /* ui *UI */) *MapArea {
+func NewMapArea(session game.Session /* session *Session */ /* ui *UI */) *MapArea {
 	mapArea := &MapArea{
 		Box:     tview.NewBox(),
 		Session: session,
@@ -55,8 +56,8 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 	}
 
 	// draw the map...
-	g.mu.RLock()
-	defer g.mu.RUnlock()
+	g.RLock()
+	defer g.RUnlock()
 
 	lvl := g.Level
 	players := g.Players
@@ -115,16 +116,16 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 			var ch rune
 			what := lvl.Get(i, j)
 			switch what {
-			case MarkerVoid:
+			case game.MarkerVoid:
 				ch = '.' // VoidChar
 				numVoid++
-			case MarkerEmpty:
+			case game.MarkerEmpty:
 				ch = ' '
 				numEmpty++
-			case MarkerBorder:
+			case game.MarkerBorder:
 				ch = BorderChar // FIXME: can do better!
 				numBorder++
-			case MarkerWall:
+			case game.MarkerWall:
 				ch = BorderChar // FIXME: can do better!
 				numWall++
 			default:
@@ -174,7 +175,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		x := x0 + mob.J + deltaJ
 		y := y0 + mob.I + deltaI
 
-		mobInfo := LookupMobInfo(mob.Type)
+		mobInfo := game.LookupMobInfo(mob.Type)
 		ch := mobInfo.Marker
 		if ch == 0 {
 			ch = '@'
@@ -272,7 +273,7 @@ const (
 type UI struct {
 	// Logger  *log.Logger
 	Session *Session
-	Lobby   *Lobby
+	Lobby   *game.Lobby
 
 	App *tview.Application
 
@@ -491,27 +492,27 @@ func (ui *UI) handleGameKeys(e *tcell.EventKey) *tcell.EventKey {
 			ui.toggleModal(ModalMenu)
 
 		case tcell.KeyLeft:
-			s.Move(MoveLeft)
+			s.Move(game.Left)
 
 		case tcell.KeyRight:
-			s.Move(MoveRight)
+			s.Move(game.Right)
 
 		case tcell.KeyUp:
-			s.Move(MoveUp)
+			s.Move(game.Up)
 
 		case tcell.KeyDown:
-			s.Move(MoveDown)
+			s.Move(game.Down)
 
 		case tcell.KeyRune:
 			switch r {
 			case 'w':
-				s.Move(MoveUp)
+				s.Move(game.Up)
 			case 'a':
-				s.Move(MoveLeft)
+				s.Move(game.Left)
 			case 's':
-				s.Move(MoveDown)
+				s.Move(game.Down)
 			case 'd':
-				s.Move(MoveRight)
+				s.Move(game.Right)
 
 			case ' ', 'x':
 				s.Attack()
@@ -591,7 +592,7 @@ type StatusFrame struct {
 	*tview.Box
 	UI *UI
 
-	cooldowns Cooldowns
+	cooldowns game.Cooldowns
 }
 
 func NewStatusFrame(ui *UI) *StatusFrame {
@@ -653,18 +654,18 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 	cooldowns := fr.cooldowns
 
 	for actInd, nticks := range cooldowns {
-		act := ActionType(actInd)
+		act := game.ActionType(actInd)
 
 		var s string
 		switch act {
-		case Nothing:
+		case game.Nothing:
 			continue
 
-		case Move:
+		case game.Move:
 			s = "MV "
-		case Attack:
+		case game.Attack:
 			s = "ATT"
-		case Defend:
+		case game.Defend:
 			s = "DEF"
 		default:
 			s = fmt.Sprintf("[%d]", int(act))
@@ -788,7 +789,7 @@ func NewLobbyScreen(ui *UI) *LobbyScreen {
 	return scr
 }
 
-func SetupUI(sess *Session, lobby *Lobby, sysLog *SystemLog) *UI {
+func SetupUI(sess *Session, lobby *game.Lobby, sysLog *SystemLog) *UI {
 	app := tview.NewApplication()
 
 	pages := tview.NewPages()
