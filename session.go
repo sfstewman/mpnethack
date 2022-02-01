@@ -10,6 +10,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/sfstewman/mpnethack/chat"
 	"github.com/sfstewman/mpnethack/game"
+	"github.com/sfstewman/mpnethack/tui"
 )
 
 type SessionState int
@@ -32,7 +33,7 @@ const (
 type SshTty struct {
 	io.ReadWriteCloser
 
-	Config         IOScreenConfig
+	Config         tui.IOScreenConfig
 	ResizeCallback func()
 	mu             sync.Mutex
 }
@@ -88,7 +89,7 @@ type Session struct {
 
 	User string
 
-	UI *UI
+	UI *tui.UI
 
 	G *game.Game
 	P *game.Player
@@ -97,6 +98,10 @@ type Session struct {
 
 	State SessionState
 	Flags SessionFlag
+}
+
+func (s *Session) GetLog() *chat.Log {
+	return s.SessionLog
 }
 
 func (s *Session) Game() *game.Game {

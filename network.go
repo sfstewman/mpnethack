@@ -8,14 +8,16 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/sfstewman/mpnethack/chat"
 	"github.com/sfstewman/mpnethack/game"
+	"github.com/sfstewman/mpnethack/tui"
 )
 
 func authLog(conn ssh.ConnMetadata, method string, err error) {
 	log.Printf("login attempt[%s] %v : %v\n", method, conn, err)
 }
 
-func AcceptNetworkLogins(hostKeyPath string, lobby *game.Lobby, systemLog *SystemLog) {
+func AcceptNetworkLogins(hostKeyPath string, lobby *game.Lobby, systemLog *chat.SystemLog) {
 	cfg := &ssh.ServerConfig{
 		NoClientAuth:    true,
 		AuthLogCallback: authLog,
@@ -67,7 +69,7 @@ type PtyReq struct {
 	Modes []byte
 }
 
-func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- IOScreenConfig) {
+func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- tui.IOScreenConfig) {
 	for req := range in {
 		log.Printf("request '%s' reply=%v len(payload)=%d\n", req.Type, req.WantReply, len(req.Payload))
 		switch req.Type {
@@ -89,7 +91,7 @@ func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- IOScree
 			}
 
 			log.Printf("pty request: %+v\n", pty)
-			cfgCh <- IOScreenConfig{
+			cfgCh <- tui.IOScreenConfig{
 				Term:      pty.Term,
 				Width:     int(pty.Width),
 				Height:    int(pty.Height),
@@ -119,7 +121,7 @@ func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- IOScree
 	}
 }
 
-func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *game.Lobby, systemLog *SystemLog) {
+func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *game.Lobby, systemLog *chat.SystemLog) {
 	conn, chans, reqs, err := ssh.NewServerConn(c, cfg)
 	if err != nil {
 		log.Printf("failed to handshake: %v", err)
@@ -142,7 +144,7 @@ func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *game.Lobby, syst
 			return
 		}
 
-		cfgCh := make(chan IOScreenConfig)
+		cfgCh := make(chan tui.IOScreenConfig)
 		sess := NewSession("Grufmore the Dominable", Authenticated)
 
 		fmt.Fprintf(channel, "\r\nConfiguring terminal\r\n")
@@ -159,7 +161,7 @@ func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *game.Lobby, syst
 
 		log.Printf("creating screen with config: %+v", cfg)
 
-		scr, err := NewIOScreenFromTty(tty, cfg)
+		scr, err := tui.NewIOScreenFromTty(tty, cfg)
 		if err != nil {
 			log.Printf("error creating screen: %v", err)
 			return
@@ -173,7 +175,7 @@ func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *game.Lobby, syst
 		// !!! FIXME !!!
 		lobby := &game.Lobby{}
 
-		ui := SetupUI(sess, lobby, systemLog)
+		ui := tui.SetupUI(sess, lobby, systemLog)
 		sess.UI = ui
 		sess.Tty = tty
 		ui.App.SetScreen(scr)

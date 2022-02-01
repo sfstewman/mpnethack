@@ -5,7 +5,9 @@ import (
 	"log"
 
 	"github.com/sfstewman/mpnethack"
+	"github.com/sfstewman/mpnethack/chat"
 	"github.com/sfstewman/mpnethack/game"
+	"github.com/sfstewman/mpnethack/tui"
 )
 
 const ConsoleFlags = mpnethack.Authenticated | mpnethack.Administrator
@@ -21,7 +23,7 @@ func main() {
 	flag.StringVar(&adminLogPath, "adminlog", "admin.log", "Path to the admin log")
 	flag.Parse()
 
-	systemLog, err := mpnethack.NewSystemLog(adminLogPath, nil)
+	systemLog, err := chat.NewSystemLog(adminLogPath, nil)
 	if err != nil {
 		log.Fatalf("error setting up system logs: %v", err)
 		return
@@ -31,7 +33,7 @@ func main() {
 
 	session := mpnethack.NewSession("Asron the Limited", ConsoleFlags)
 	lobby.AddSession(session)
-	session.UI = mpnethack.SetupUI(session, lobby, systemLog)
+	session.UI = tui.SetupUI(session, lobby, systemLog)
 
 	if hostKeyPath != "" {
 		go mpnethack.AcceptNetworkLogins(hostKeyPath, lobby, systemLog)

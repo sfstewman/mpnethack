@@ -128,10 +128,15 @@ const (
 )
 
 type Session interface {
+	IsAdministrator() bool
+	HasGame() bool
+
 	Game() *Game
 	Player() *Player
 	UserName() string
 
+	GetLog() *chat.Log
+	ConsoleInput(string)
 	Message(chat.MsgLevel, string) error
 
 	Join(g *Game) error
@@ -598,6 +603,10 @@ func (g *Game) UserAction(s Session, act ActionType, arg int16) error {
 	g.handleAction(s, action{act, arg})
 
 	return nil
+}
+
+func (g *Game) Move(s Session, direc Direction) error {
+	return g.UserAction(s, Move, int16(direc))
 }
 
 func (g *Game) handleAction(s Session, act action) {

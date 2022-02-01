@@ -1,4 +1,4 @@
-package mpnethack
+package chat
 
 import (
 	"bufio"

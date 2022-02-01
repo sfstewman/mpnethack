@@ -1,4 +1,4 @@
-package mpnethack
+package tui
 
 import (
 	"fmt"
@@ -9,7 +9,6 @@ import (
 	"github.com/rivo/tview"
 	"github.com/sfstewman/mpnethack/chat"
 	"github.com/sfstewman/mpnethack/game"
-	"github.com/sfstewman/mpnethack/tui"
 	"github.com/sfstewman/mpnethack/tui/widgets"
 )
 
@@ -28,7 +27,7 @@ const (
 )
 
 type UI struct {
-	Session *Session
+	Session game.Session
 	Lobby   *game.Lobby
 
 	App *tview.Application
@@ -43,7 +42,7 @@ type UI struct {
 
 	Status *StatusFrame
 	Items  *tview.Box // ItemFrame
-	Map    *tui.MapArea
+	Map    *MapArea
 
 	PageShown  PageNumber
 	LastPage   PageNumber
@@ -166,7 +165,7 @@ func (ui *UI) Quit() {
 	ui.App.Stop()
 }
 
-func setupAdminPage(ui *UI, sysLog *SystemLog) {
+func setupAdminPage(ui *UI, sysLog *chat.SystemLog) {
 	main := tview.NewPages()
 
 	frame := tview.NewFrame(main)
@@ -240,6 +239,7 @@ func (ui *UI) handleGameKeys(e *tcell.EventKey) *tcell.EventKey {
 	r := e.Rune()
 
 	s := ui.Session
+	g := s.Game()
 
 	if m == tcell.ModNone {
 		switch k {
@@ -247,33 +247,33 @@ func (ui *UI) handleGameKeys(e *tcell.EventKey) *tcell.EventKey {
 			ui.toggleModal(ModalMenu)
 
 		case tcell.KeyLeft:
-			s.Move(game.Left)
+			g.Move(s, game.Left)
 
 		case tcell.KeyRight:
-			s.Move(game.Right)
+			g.Move(s, game.Right)
 
 		case tcell.KeyUp:
-			s.Move(game.Up)
+			g.Move(s, game.Up)
 
 		case tcell.KeyDown:
-			s.Move(game.Down)
+			g.Move(s, game.Down)
 
 		case tcell.KeyRune:
 			switch r {
 			case 'w':
-				s.Move(game.Up)
+				g.Move(s, game.Up)
 			case 'a':
-				s.Move(game.Left)
+				g.Move(s, game.Left)
 			case 's':
-				s.Move(game.Down)
+				g.Move(s, game.Down)
 			case 'd':
-				s.Move(game.Right)
+				g.Move(s, game.Right)
 
 			case ' ', 'x':
-				s.Attack()
+				g.UserAction(s, game.Attack, 0)
 
 			case 'v', 'z':
-				s.Defend()
+				g.UserAction(s, game.Defend, 0)
 
 				// case '1', '2', '3', '4', '5':
 				// Special
@@ -388,7 +388,7 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 	ymax := y0 + h
 	y := y0
 
-	s := fmt.Sprintf("[:]%s %s[-:-:-]", session.User, adminStr)
+	s := fmt.Sprintf("[:]%s %s[-:-:-]", session.UserName(), adminStr)
 	if w > 0 && h > 0 {
 		tview.Print(screen, s, x0, y, w, tview.AlignCenter, tcell.ColorDefault)
 	}
@@ -405,7 +405,8 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 		return
 	}
 
-	fr.cooldowns = session.G.GetCooldowns(session, fr.cooldowns)
+	g := session.Game()
+	fr.cooldowns = g.GetCooldowns(session, fr.cooldowns)
 	cooldowns := fr.cooldowns
 
 	for actInd, nticks := range cooldowns {
@@ -491,20 +492,20 @@ func (l *LobbyScreen) newGame() {
 	sess := ui.Session
 	lobby := ui.Lobby
 
-	if sess.G != nil {
+	if sess.HasGame() {
 		// error?
 		return
 	}
 
 	g, err := lobby.NewGame(sess)
 	if err != nil {
-		log.Printf("\"%s\" [sess %p] error creating new game: %v", sess.User, sess, err)
+		log.Printf("\"%s\" [sess %p] error creating new game: %v", sess.UserName(), sess, err)
 
 		// TODO: popup with error
 		return
 	}
 
-	log.Printf("\"%s\" [sess %p] created new game: %v", sess.User, sess, g)
+	log.Printf("\"%s\" [sess %p] created new game: %v", sess.UserName(), sess, g)
 	ui.showPage(PageMain)
 }
 
@@ -544,7 +545,7 @@ func NewLobbyScreen(ui *UI) *LobbyScreen {
 	return scr
 }
 
-func SetupUI(sess *Session, lobby *game.Lobby, sysLog *SystemLog) *UI {
+func SetupUI(sess game.Session, lobby *game.Lobby, sysLog *chat.SystemLog) *UI {
 	app := tview.NewApplication()
 
 	pages := tview.NewPages()
@@ -574,13 +575,13 @@ func SetupUI(sess *Session, lobby *game.Lobby, sysLog *SystemLog) *UI {
 	lobbyScr := NewLobbyScreen(ui)
 	ui.LobbyView = lobbyScr
 
-	mapArea := tui.NewMapArea(sess)
+	mapArea := NewMapArea(sess)
 	statusArea := NewStatusFrame(ui)
 	statusArea.SetBorder(true).SetTitle("Status")
 
 	itemView := tview.NewBox().SetBorder(true).SetTitle("Items")
 
-	inputArea := widgets.NewInputArea(ui.Session.SessionLog)
+	inputArea := widgets.NewInputArea(ui.Session.GetLog())
 	inputArea.DirectKeyFunc = ui.handleGameKeys
 	inputArea.ConsoleInputFunc = ui.Session.ConsoleInput
 	inputArea.SetBorder(true).SetTitle("Input")
