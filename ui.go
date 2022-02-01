@@ -3,11 +3,11 @@ package mpnethack
 import (
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 
 	tcell "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/sfstewman/mpnethack/uilib"
 	"github.com/sfstewman/mpnethack/util"
 )
 
@@ -211,143 +211,6 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 	m.first = false
 }
 
-type InputMode int
-
-const (
-	InputGame InputMode = iota
-	InputConsole
-)
-
-type InputArea struct {
-	*tview.Flex
-
-	Log   *LogView
-	Input *tview.InputField
-
-	InputMode InputMode
-
-	UI *UI
-
-	DirectKeyFunc    func(e *tcell.EventKey) *tcell.EventKey
-	ConsoleInputFunc func(string)
-
-	LastKey    tcell.Key
-	LastMods   tcell.ModMask
-	LastRune   rune
-	HasLastKey bool
-}
-
-func NewInputArea(ui *UI, gl *util.GameLog) *InputArea {
-	inp := &InputArea{
-		Flex:       tview.NewFlex(),
-		InputMode:  InputGame,
-		UI:         ui,
-		HasLastKey: false,
-	}
-
-	inp.Input = tview.NewInputField().
-		SetLabel("~ ").
-		SetFieldWidth(0).
-		SetDoneFunc(inp.handleConsoleCmd)
-
-	inp.Input.SetInputCapture(inp.handleInput)
-
-	// inp.Log = NewLogView(ui.Session.SessionLog)
-	inp.Log = NewLogView(gl)
-
-	inp.SetDirection(tview.FlexRow).
-		AddItem(inp.Log, 0, 1, false).
-		AddItem(inp.Input, 1, 1, true)
-
-	inp.SetBorderPadding(1, 1, 1, 1)
-
-	// inp.SetInputCapture(inp.handleInput)
-	inp.Input.SetInputCapture(inp.handleInput)
-
-	return inp
-}
-
-func (inp *InputArea) Draw(scr tcell.Screen) {
-	inp.Flex.Draw(scr)
-
-	if inp.InputMode == InputGame {
-		scr.HideCursor()
-	}
-}
-
-func (inp *InputArea) handleConsoleCmd(key tcell.Key) {
-	switch key {
-	case tcell.KeyEnter:
-		// XXX: handle message
-		txt := inp.Input.GetText()
-		if txt != "" {
-			inp.Input.SetText("")
-			inp.InputMode = InputGame
-
-			if inp.ConsoleInputFunc != nil {
-				inp.ConsoleInputFunc(txt)
-			} else {
-				log.Printf("[console] %s", txt)
-				// inp.UI.Session.ConsoleInput(txt)
-			}
-		}
-
-	case tcell.KeyEsc:
-		inp.InputMode = InputGame
-	}
-}
-
-func (inp *InputArea) handleInput(e *tcell.EventKey) *tcell.EventKey {
-	inp.HasLastKey = true
-
-	k := e.Key()
-	m := e.Modifiers()
-	r := e.Rune()
-
-	switch inp.InputMode {
-	case InputGame:
-		if inp.DirectKeyFunc != nil {
-			e = inp.DirectKeyFunc(e)
-
-			if e == nil {
-				return nil
-			}
-
-			k = e.Key()
-			m = e.Modifiers()
-			r = e.Rune()
-		}
-
-		if k == tcell.KeyEsc && m == tcell.ModNone {
-			// bring up menu
-			inp.UI.toggleModal(ModalMenu)
-		}
-
-		if k == tcell.KeyPgUp {
-			inp.Log.scroll(scrollUp)
-		}
-
-		if k == tcell.KeyPgDn {
-			inp.Log.scroll(scrollDown)
-		}
-
-		if k == tcell.KeyRune && m == tcell.ModNone && (r == '`' || r == '~' || r == '/') {
-			inp.InputMode = InputConsole
-		}
-
-	case InputConsole:
-		if k == tcell.KeyEsc && m == tcell.ModNone {
-			inp.InputMode = InputGame
-		} else if k == tcell.KeyTab && m == tcell.ModNone {
-			inp.InputMode = InputGame
-		} else {
-			return e
-		}
-	}
-
-	return nil
-}
-
 type Menu struct {
 	*tview.Frame
 	List *tview.List
@@ -434,7 +297,7 @@ type UI struct {
 	PageNames map[string]tview.Primitive
 
 	AdminLog   *util.GameLog
-	AdminInput *InputArea
+	AdminInput *uilib.InputArea
 	// LogView *LogView
 
 	mu sync.Mutex
@@ -548,176 +411,6 @@ func (ui *UI) Quit() {
 	ui.App.Stop()
 }
 
-type LogView struct {
-	*tview.TextView
-
-	Log *util.GameLog
-
-	Offset int
-
-	VisibleFunc func() bool
-	// mu sync.Mutex
-}
-
-const LogTimeLayout = "2006/01/02 03:04:05 MST"
-
-func NewLogViewWithLines(numLines int) *LogView {
-	return NewLogView(util.NewGameLog(numLines))
-}
-
-func NewLogView(gl *util.GameLog) *LogView {
-	txtView := tview.NewTextView().SetDynamicColors(true)
-
-	v := &LogView{
-		TextView: txtView,
-		Log:      gl,
-		Offset:   -1,
-	}
-
-	return v
-}
-
-type scrollDirec int
-
-const (
-	scrollUp scrollDirec = iota
-	scrollDown
-)
-
-func (v *LogView) scroll(direc scrollDirec) {
-	_, _, _, h := v.GetInnerRect()
-
-	delta := h / 2
-
-	if v.Offset < 0 {
-		if direc == scrollDown {
-			return
-		}
-
-		delta += h
-	}
-
-	if direc == scrollUp {
-		delta = -delta
-	}
-
-	v.ScrollBy(delta)
-}
-
-func (v *LogView) ScrollBy(deltaLines int) {
-	n := v.Log.NumLines()
-
-	if v.Offset < 0 {
-		v.Offset = n + deltaLines
-	} else {
-		v.Offset += deltaLines
-	}
-
-	if v.Offset < 0 {
-		v.Offset = 0
-	} else if v.Offset >= n {
-		v.Offset = -1
-	}
-}
-
-func (v *LogView) redrawLog() {
-	wr := v.TextView.BatchWriter()
-	defer wr.Close()
-
-	wr.Clear()
-	if v.Log == nil {
-		return
-	}
-
-	numLines := v.Log.NumLines()
-
-	_, _, _, h := v.GetInnerRect()
-
-	/*
-		off := numLines - h - 1
-		if off < 0 {
-			off = 0
-		}
-	*/
-
-	count := 0
-	first := true
-	var minSeq, maxSeq uint
-	var minCnt, maxCnt int
-	v.Log.VisitLines(0, func(msg util.LogMessage) bool {
-		if first || msg.Seq < minSeq {
-			minSeq = msg.Seq
-			minCnt = count
-		}
-
-		if first || maxSeq > msg.Seq {
-			maxSeq = msg.Seq
-			maxCnt = count
-		}
-		count++
-
-		return true
-	})
-
-	off := v.Offset
-	if off < 0 {
-		off = -(h - 1)
-	}
-
-	lineCount := 0
-	v.Log.VisitLines(off, func(msg util.LogMessage) bool {
-		s := v.formatMessage(msg)
-		fmt.Fprint(wr, s)
-		lineCount++
-		return lineCount < h-1
-		// return true
-	})
-
-	fmt.Fprintf(wr, "<-- numLines=%d, off=%d, count=%d, minSeq=%d, maxSeq=%d -->",
-		numLines, off, count, minSeq, maxSeq)
-}
-
-func (v *LogView) Draw(scr tcell.Screen) {
-	v.redrawLog()
-	v.TextView.Draw(scr)
-}
-
-func (v *LogView) formatMessage(msg util.LogMessage) string {
-	var btag, etag, sfx string
-
-	etag = "[-:-:-]"
-	switch msg.Level {
-	case util.MsgDebug:
-		btag = "[gray:black]"
-	case util.MsgInfo:
-		btag = ""
-		etag = ""
-	case util.MsgChat:
-		btag = "[blue:black]"
-	case util.MsgPrivate:
-		btag = "[pink:black]"
-	case util.MsgGame:
-		btag = "[green:black]"
-	case util.MsgAdmin:
-		btag = "[red:black:b]"
-	case util.MsgSystem:
-		btag = "[yellow:black:b]"
-	}
-
-	timeStr := msg.Time.Format(LogTimeLayout)
-
-	line := msg.Text
-	if !strings.HasSuffix(line, "\n") && !strings.HasSuffix(line, "\r\n") {
-		sfx = "\n"
-	}
-
-	return fmt.Sprintf("%s%s [%d] %s%s%s", btag, timeStr, msg.Seq, tview.Escape(line), etag, sfx)
-}
-
-func (v *LogView) AddLine(lvl util.MsgLevel, line string) {
-	v.Log.LogLine(lvl, line)
-}
-
 func setupAdminPage(ui *UI, sysLog *SystemLog) {
 	main := tview.NewPages()
 
@@ -761,7 +454,19 @@ func setupAdminPage(ui *UI, sysLog *SystemLog) {
 	})
 
 	ui.AdminLog = adminLog
-	ui.AdminInput = NewInputArea(ui, adminLog)
+	ui.AdminInput = uilib.NewInputArea(adminLog)
+
+	ui.AdminInput.DirectKeyFunc = func(e *tcell.EventKey) *tcell.EventKey {
+		k := e.Key()
+		m := e.Modifiers()
+		if k == tcell.KeyEsc && m == tcell.ModNone {
+			// bring up menu
+			ui.toggleModal(ModalMenu)
+			return nil
+		}
+
+		return e
+	}
 
 	ui.AdminInput.SetBorder(true)
 	ui.AdminInput.SetTitle("Console")
@@ -783,6 +488,9 @@ func (ui *UI) handleGameKeys(e *tcell.EventKey) *tcell.EventKey {
 
 	if m == tcell.ModNone {
 		switch k {
+		case tcell.KeyEsc:
+			ui.toggleModal(ModalMenu)
+
 		case tcell.KeyLeft:
 			s.Move(MoveLeft)
 
@@ -1117,7 +825,7 @@ func SetupUI(sess *Session, lobby *Lobby, sysLog *SystemLog) *UI {
 
 	itemView := tview.NewBox().SetBorder(true).SetTitle("Items")
 
-	inputArea := NewInputArea(ui, ui.Session.SessionLog)
+	inputArea := uilib.NewInputArea(ui.Session.SessionLog)
 	inputArea.DirectKeyFunc = ui.handleGameKeys
 	inputArea.ConsoleInputFunc = ui.Session.ConsoleInput
 	inputArea.SetBorder(true).SetTitle("Input")
