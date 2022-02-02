@@ -2,12 +2,9 @@ package mpnethack
 
 import (
 	"context"
-	crand "crypto/rand"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"sync"
 	"time"
 	"unicode"
@@ -315,7 +312,7 @@ type Game struct {
 	pump *time.Ticker
 	Ctx  context.Context
 
-	RNG *rand.Rand
+	Dice Dice
 
 	Active   []Session
 	GameLog  *chat.Log
@@ -377,43 +374,10 @@ func (g *Game) hasCollision(newI, newJ int) Namer {
 
 const GameLogNumLines = 100
 
-func setupRand() (*rand.Rand, error) {
-	var randBytes [8]byte
-
-	_, err := crand.Read(randBytes[:])
-	if err != nil {
-		return nil, err
-	}
-
-	seed := int64(binary.LittleEndian.Uint64(randBytes[:]))
-
-	// FIXME: log seed!
-	source := rand.NewSource(seed)
-	return rand.New(source), nil
-}
-
-func rollD20(rng *rand.Rand) int {
-	return rng.Intn(20) + 1
-}
-
-func rollMdN(rng *rand.Rand, m, n int) int {
-	if n <= 0 || m <= 0 {
-		return 0
-	}
-
-	acc := 0
-	for i := 0; i < m; i++ {
-		num := rng.Intn(n) + 1
-		acc += num
-	}
-
-	return acc
-}
-
 func NewGame(l *Level) (*Game, error) {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
-	rng, err := setupRand()
+	dice, err := NewDice()
 	if err != nil {
 		return nil, err
 	}
@@ -422,7 +386,7 @@ func NewGame(l *Level) (*Game, error) {
 		pump: time.NewTicker(GameRefreshInterval),
 		Ctx:  ctx,
 
-		RNG: rng,
+		Dice: dice,
 
 		GameLog: chat.NewLog(GameLogNumLines),
 
@@ -830,8 +794,8 @@ func (g *Game) loopInner() {
 					switch obj := coll.(type) {
 					case *Mob:
 						toHit := pl.GetStats().ToHit(obj.GetStats())
-						if rollD20(g.RNG) <= toHit {
-							dmg := rollMdN(g.RNG, 2, 4)
+						if g.Dice.RollD20() <= toHit {
+							dmg := g.Dice.Roll(2, 4)
 							g.messagef(chat.Game, "%s slashes %s with his rusty sword for %d damage", pl.Name(), coll.Name(), dmg)
 						} else {
 							g.messagef(chat.Game, "%s swings wildy at %s but misses", pl.Name(), coll.Name())
