@@ -4,13 +4,14 @@ import (
 	"flag"
 	"log"
 
-	"github.com/sfstewman/mpnethack"
 	"github.com/sfstewman/mpnethack/chat"
 	"github.com/sfstewman/mpnethack/game"
+	"github.com/sfstewman/mpnethack/network"
 	"github.com/sfstewman/mpnethack/tui"
+	"github.com/sfstewman/mpnethack/user"
 )
 
-const ConsoleFlags = mpnethack.Authenticated | mpnethack.Administrator
+const ConsoleFlags = user.Authenticated | user.Administrator
 
 func main() {
 	var (
@@ -31,12 +32,12 @@ func main() {
 
 	lobby := &game.Lobby{}
 
-	session := mpnethack.NewSession("Asron the Limited", ConsoleFlags)
+	session := user.NewSession("Asron the Limited", ConsoleFlags)
 	lobby.AddSession(session)
 	session.UI = tui.SetupUI(session, lobby, systemLog)
 
 	if hostKeyPath != "" {
-		go mpnethack.AcceptNetworkLogins(hostKeyPath, lobby, systemLog)
+		go network.AcceptNetworkLogins(hostKeyPath, lobby, systemLog)
 	}
 
 	if err := session.UI.Run(); err != nil {

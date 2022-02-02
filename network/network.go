@@ -1,4 +1,4 @@
-package mpnethack
+package network
 
 import (
 	"fmt"
@@ -11,6 +11,7 @@ import (
 	"github.com/sfstewman/mpnethack/chat"
 	"github.com/sfstewman/mpnethack/game"
 	"github.com/sfstewman/mpnethack/tui"
+	"github.com/sfstewman/mpnethack/user"
 )
 
 func authLog(conn ssh.ConnMetadata, method string, err error) {
@@ -69,7 +70,7 @@ type PtyReq struct {
 	Modes []byte
 }
 
-func channelRequests(sess *Session, in <-chan *ssh.Request, cfgCh chan<- tui.IOScreenConfig) {
+func channelRequests(sess *user.Session, in <-chan *ssh.Request, cfgCh chan<- tui.IOScreenConfig) {
 	for req := range in {
 		log.Printf("request '%s' reply=%v len(payload)=%d\n", req.Type, req.WantReply, len(req.Payload))
 		switch req.Type {
@@ -145,7 +146,7 @@ func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *game.Lobby, syst
 		}
 
 		cfgCh := make(chan tui.IOScreenConfig)
-		sess := NewSession("Grufmore the Dominable", Authenticated)
+		sess := user.NewSession("Grufmore the Dominable", user.Authenticated)
 
 		fmt.Fprintf(channel, "\r\nConfiguring terminal\r\n")
 
