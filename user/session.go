@@ -6,8 +6,8 @@ import (
 	"log"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/sfstewman/mpnethack"
 	"github.com/sfstewman/mpnethack/chat"
-	"github.com/sfstewman/mpnethack/game"
 	"github.com/sfstewman/mpnethack/tui"
 )
 
@@ -41,8 +41,8 @@ type Session struct {
 
 	UI *tui.UI
 
-	G *game.Game
-	P *game.Player
+	G *mpnethack.Game
+	P *mpnethack.Player
 
 	SessionLog *chat.Log
 
@@ -54,11 +54,11 @@ func (s *Session) GetLog() *chat.Log {
 	return s.SessionLog
 }
 
-func (s *Session) Game() *game.Game {
+func (s *Session) Game() *mpnethack.Game {
 	return s.G
 }
 
-func (s *Session) Player() *game.Player {
+func (s *Session) Player() *mpnethack.Player {
 	return s.P
 }
 
@@ -118,16 +118,16 @@ func (s *Session) Quit() {
 	s.UI.Quit()
 }
 
-func (s *Session) Move(direc game.Direction) {
-	s.G.UserAction(s, game.Move, int16(direc))
+func (s *Session) Move(direc mpnethack.Direction) {
+	s.G.UserAction(s, mpnethack.Move, int16(direc))
 }
 
 func (s *Session) Attack() {
-	s.G.UserAction(s, game.Attack, 0)
+	s.G.UserAction(s, mpnethack.Attack, 0)
 }
 
 func (s *Session) Defend() {
-	s.G.UserAction(s, game.Defend, 0)
+	s.G.UserAction(s, mpnethack.Defend, 0)
 }
 
 func (s *Session) ConsoleInput(txt string) {
@@ -142,7 +142,7 @@ func (s *Session) ConsoleInput(txt string) {
 	}
 }
 
-func (s *Session) Join(g *game.Game) error {
+func (s *Session) Join(g *mpnethack.Game) error {
 	if s.G != nil {
 		return fmt.Errorf("game is nil")
 	}

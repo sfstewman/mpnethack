@@ -5,18 +5,18 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/sfstewman/mpnethack"
 	"github.com/sfstewman/mpnethack/chat"
-	"github.com/sfstewman/mpnethack/game"
 )
 
 type MapArea struct {
 	*tview.Box
-	Session game.Session
+	Session mpnethack.Session
 
 	first bool
 }
 
-func NewMapArea(session game.Session /* session *Session */ /* ui *UI */) *MapArea {
+func NewMapArea(session mpnethack.Session /* session *Session */ /* ui *UI */) *MapArea {
 	mapArea := &MapArea{
 		Box:     tview.NewBox(),
 		Session: session,
@@ -109,16 +109,16 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 			var ch rune
 			what := lvl.Get(i, j)
 			switch what {
-			case game.MarkerVoid:
+			case mpnethack.MarkerVoid:
 				ch = '.' // VoidChar
 				numVoid++
-			case game.MarkerEmpty:
+			case mpnethack.MarkerEmpty:
 				ch = ' '
 				numEmpty++
-			case game.MarkerBorder:
+			case mpnethack.MarkerBorder:
 				ch = BorderChar // FIXME: can do better!
 				numBorder++
-			case game.MarkerWall:
+			case mpnethack.MarkerWall:
 				ch = BorderChar // FIXME: can do better!
 				numWall++
 			default:
@@ -168,7 +168,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		x := x0 + mob.J + deltaJ
 		y := y0 + mob.I + deltaI
 
-		mobInfo := game.LookupMobInfo(mob.Type)
+		mobInfo := mpnethack.LookupMobInfo(mob.Type)
 		ch := mobInfo.Marker
 		if ch == 0 {
 			ch = '@'

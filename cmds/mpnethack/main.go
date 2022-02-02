@@ -4,8 +4,8 @@ import (
 	"flag"
 	"log"
 
+	"github.com/sfstewman/mpnethack"
 	"github.com/sfstewman/mpnethack/chat"
-	"github.com/sfstewman/mpnethack/game"
 	"github.com/sfstewman/mpnethack/network"
 	"github.com/sfstewman/mpnethack/tui"
 	"github.com/sfstewman/mpnethack/user"
@@ -30,7 +30,7 @@ func main() {
 		return
 	}
 
-	lobby := &game.Lobby{}
+	lobby := &mpnethack.Lobby{}
 
 	session := user.NewSession("Asron the Limited", ConsoleFlags)
 	lobby.AddSession(session)

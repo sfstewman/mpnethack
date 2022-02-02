@@ -8,8 +8,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"github.com/sfstewman/mpnethack"
 	"github.com/sfstewman/mpnethack/chat"
-	"github.com/sfstewman/mpnethack/game"
 	"github.com/sfstewman/mpnethack/tui"
 	"github.com/sfstewman/mpnethack/user"
 )
@@ -18,7 +18,7 @@ func authLog(conn ssh.ConnMetadata, method string, err error) {
 	log.Printf("login attempt[%s] %v : %v\n", method, conn, err)
 }
 
-func AcceptNetworkLogins(hostKeyPath string, lobby *game.Lobby, systemLog *chat.SystemLog) {
+func AcceptNetworkLogins(hostKeyPath string, lobby *mpnethack.Lobby, systemLog *chat.SystemLog) {
 	cfg := &ssh.ServerConfig{
 		NoClientAuth:    true,
 		AuthLogCallback: authLog,
@@ -122,7 +122,7 @@ func channelRequests(sess *user.Session, in <-chan *ssh.Request, cfgCh chan<- tu
 	}
 }
 
-func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *game.Lobby, systemLog *chat.SystemLog) {
+func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *mpnethack.Lobby, systemLog *chat.SystemLog) {
 	conn, chans, reqs, err := ssh.NewServerConn(c, cfg)
 	if err != nil {
 		log.Printf("failed to handshake: %v", err)
@@ -174,7 +174,7 @@ func handleConnection(c net.Conn, cfg *ssh.ServerConfig, lobby *game.Lobby, syst
 		}
 
 		// !!! FIXME !!!
-		lobby := &game.Lobby{}
+		lobby := &mpnethack.Lobby{}
 
 		ui := tui.SetupUI(sess, lobby, systemLog)
 		sess.UI = ui

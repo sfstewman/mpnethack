@@ -7,8 +7,8 @@ import (
 
 	tcell "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/sfstewman/mpnethack"
 	"github.com/sfstewman/mpnethack/chat"
-	"github.com/sfstewman/mpnethack/game"
 	"github.com/sfstewman/mpnethack/tui/widgets"
 )
 
@@ -27,8 +27,8 @@ const (
 )
 
 type UI struct {
-	Session game.Session
-	Lobby   *game.Lobby
+	Session mpnethack.Session
+	Lobby   *mpnethack.Lobby
 
 	App *tview.Application
 
@@ -247,33 +247,33 @@ func (ui *UI) handleGameKeys(e *tcell.EventKey) *tcell.EventKey {
 			ui.toggleModal(ModalMenu)
 
 		case tcell.KeyLeft:
-			g.Move(s, game.Left)
+			g.Move(s, mpnethack.Left)
 
 		case tcell.KeyRight:
-			g.Move(s, game.Right)
+			g.Move(s, mpnethack.Right)
 
 		case tcell.KeyUp:
-			g.Move(s, game.Up)
+			g.Move(s, mpnethack.Up)
 
 		case tcell.KeyDown:
-			g.Move(s, game.Down)
+			g.Move(s, mpnethack.Down)
 
 		case tcell.KeyRune:
 			switch r {
 			case 'w':
-				g.Move(s, game.Up)
+				g.Move(s, mpnethack.Up)
 			case 'a':
-				g.Move(s, game.Left)
+				g.Move(s, mpnethack.Left)
 			case 's':
-				g.Move(s, game.Down)
+				g.Move(s, mpnethack.Down)
 			case 'd':
-				g.Move(s, game.Right)
+				g.Move(s, mpnethack.Right)
 
 			case ' ', 'x':
-				g.UserAction(s, game.Attack, 0)
+				g.UserAction(s, mpnethack.Attack, 0)
 
 			case 'v', 'z':
-				g.UserAction(s, game.Defend, 0)
+				g.UserAction(s, mpnethack.Defend, 0)
 
 				// case '1', '2', '3', '4', '5':
 				// Special
@@ -347,7 +347,7 @@ type StatusFrame struct {
 	*tview.Box
 	UI *UI
 
-	cooldowns game.Cooldowns
+	cooldowns mpnethack.Cooldowns
 }
 
 func NewStatusFrame(ui *UI) *StatusFrame {
@@ -410,18 +410,18 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 	cooldowns := fr.cooldowns
 
 	for actInd, nticks := range cooldowns {
-		act := game.ActionType(actInd)
+		act := mpnethack.ActionType(actInd)
 
 		var s string
 		switch act {
-		case game.Nothing:
+		case mpnethack.Nothing:
 			continue
 
-		case game.Move:
+		case mpnethack.Move:
 			s = "MV "
-		case game.Attack:
+		case mpnethack.Attack:
 			s = "ATT"
-		case game.Defend:
+		case mpnethack.Defend:
 			s = "DEF"
 		default:
 			s = fmt.Sprintf("[%d]", int(act))
@@ -545,7 +545,7 @@ func NewLobbyScreen(ui *UI) *LobbyScreen {
 	return scr
 }
 
-func SetupUI(sess game.Session, lobby *game.Lobby, sysLog *chat.SystemLog) *UI {
+func SetupUI(sess mpnethack.Session, lobby *mpnethack.Lobby, sysLog *chat.SystemLog) *UI {
 	app := tview.NewApplication()
 
 	pages := tview.NewPages()
