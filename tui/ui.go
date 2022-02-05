@@ -41,7 +41,7 @@ type UI struct {
 	Focus tview.Primitive
 
 	Status *StatusFrame
-	Items  *tview.Box // ItemFrame
+	Items  *ItemFrame
 	Map    *MapArea
 
 	PageShown  PageNumber
@@ -357,12 +357,12 @@ func NewStatusFrame(ui *UI) *StatusFrame {
 	}
 }
 
-func (fr *StatusFrame) horizontalDivider(screen tcell.Screen, y int) {
-	_, y0, _, h := fr.GetInnerRect()
-	boxX0, _, boxW, _ := fr.GetRect()
+func DrawHorizontalDivider(b *tview.Box, screen tcell.Screen, y int) {
+	_, y0, _, h := b.GetInnerRect()
+	boxX0, _, boxW, _ := b.GetRect()
 
 	ymax := y0 + h
-	if y >= ymax {
+	if y < y0 || y >= ymax {
 		return
 	}
 
@@ -398,7 +398,7 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 		return
 	}
 
-	fr.horizontalDivider(screen, y)
+	DrawHorizontalDivider(fr.Box, screen, y)
 
 	if y++; y >= ymax {
 		// ... HANDLE BETTER ...
@@ -469,7 +469,7 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 		}
 	}
 
-	fr.horizontalDivider(screen, y)
+	DrawHorizontalDivider(fr.Box, screen, y)
 
 	if y++; y >= ymax {
 		// ... HANDLE BETTER ...
@@ -579,7 +579,8 @@ func SetupUI(sess mpnethack.Session, lobby *mpnethack.Lobby, sysLog *chat.System
 	statusArea := NewStatusFrame(ui)
 	statusArea.SetBorder(true).SetTitle("Status")
 
-	itemView := tview.NewBox().SetBorder(true).SetTitle("Items")
+	itemView := NewItemFrame(ui)
+	itemView.SetBorder(true).SetTitle("Items")
 
 	inputArea := widgets.NewInputArea(ui.Session.GetLog())
 	inputArea.DirectKeyFunc = ui.handleGameKeys
