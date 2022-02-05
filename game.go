@@ -706,7 +706,7 @@ func (g *Game) loopInner() {
 	for i := range g.Mobs {
 		mob := &g.Mobs[i]
 
-		if mob.Direc == 0 {
+		if mob.Direc == 0 || !mob.IsAlive() {
 			continue
 		}
 
