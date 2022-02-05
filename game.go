@@ -615,6 +615,18 @@ func (g *Game) Move(s Session, direc Direction) error {
 	return g.UserAction(s, Move, int16(direc))
 }
 
+func clipCoord(x, xMin, xMaxPlusOne int) int {
+	if x < xMin {
+		return xMin
+	}
+
+	if x >= xMaxPlusOne {
+		return xMaxPlusOne - 1
+	}
+
+	return x
+}
+
 func (g *Game) handleAction(act Action) {
 	pl := act.Player
 	if pl == nil {
@@ -630,24 +642,8 @@ func (g *Game) handleAction(act Action) {
 		di, dj, _, _ := direc.Vectors()
 		dir := direc.Name()
 
-		newI := pl.I + di
-		newJ := pl.J + dj
-
-		if newI < 0 {
-			newI = 0
-		}
-
-		if newI >= lvl.H {
-			newI = lvl.H - 1
-		}
-
-		if newJ < 0 {
-			newJ = 0
-		}
-
-		if newJ >= lvl.W {
-			newJ = lvl.W - 1
-		}
+		newI := clipCoord(pl.I+di, 0, lvl.H)
+		newJ := clipCoord(pl.J+dj, 0, lvl.W)
 
 		if what := g.hasCollision(newI, newJ); what != nil {
 			g.messagef(chat.Game, "%s tried to move %s but hit a %s", user, dir, what.Name())
@@ -723,24 +719,8 @@ func (g *Game) loopInner() {
 				mirror = Left
 			}
 
-			i1 := mob.I + di
-			j1 := mob.J + dj
-
-			if i1 < 0 {
-				i1 = 0
-			}
-
-			if i1 >= lvl.H {
-				i1 = lvl.H - 1
-			}
-
-			if j1 < 0 {
-				j1 = 0
-			}
-
-			if j1 >= lvl.W {
-				j1 = lvl.W - 1
-			}
+			i1 := clipCoord(mob.I+di, 0, lvl.H)
+			j1 := clipCoord(mob.J+dj, 0, lvl.W)
 
 			if what := g.hasCollision(i1, j1); what != nil {
 				i1 = mob.I
