@@ -128,14 +128,10 @@ func calcCooldowns(now uint64, last []uint64, cd Cooldowns) Cooldowns {
 	return cd
 }
 
-type actionKey struct {
-	sess Session
-	act  ActionType
-}
-
-type action struct {
-	Type ActionType
-	Arg  int16
+type Action struct {
+	Player *Player
+	Type   ActionType
+	Arg    int16
 }
 
 const (
@@ -363,7 +359,7 @@ type Game struct {
 	GameLog  *chat.Log
 	FrameNum uint64
 
-	actions map[Session]action
+	pendingActions []Action
 
 	Level   *Level
 	Players map[string]*Player
@@ -436,7 +432,6 @@ func NewGame(l *Level) (*Game, error) {
 		GameLog: chat.NewLog(GameLogNumLines),
 
 		// cooldowns: make(map[*Session][]uint64),
-		actions: make(map[Session]action),
 
 		Level:   l, // NewBoxLevel(LevelWidth, LevelHeight),
 		Players: make(map[string]*Player),
@@ -581,8 +576,8 @@ func (g *Game) GetCooldowns(s Session, cds Cooldowns) Cooldowns {
 	return calcCooldowns(now, last, cds)
 }
 
-func (g *Game) UserAction(s Session, act ActionType, arg int16) error {
-	if int(act) >= len(UserActionCooldownTicks) {
+func (g *Game) UserAction(s Session, actType ActionType, arg int16) error {
+	if int(actType) >= len(UserActionCooldownTicks) {
 		return InvalidCooldownError
 	}
 
@@ -601,17 +596,17 @@ func (g *Game) UserAction(s Session, act ActionType, arg int16) error {
 		pl.Cooldowns = actionCDs
 	}
 
-	last := actionCDs[act]
-	if last > 0 && now-last < UserActionCooldownTicks[act] {
+	last := actionCDs[actType]
+	if last > 0 && now-last < UserActionCooldownTicks[actType] {
 		return OnCooldownError
 	}
 
-	if act != Nothing {
-		actionCDs[act] = now
-		log.Printf("action %v, cooldowns %v\n", act, actionCDs)
+	if actType != Nothing {
+		actionCDs[actType] = now
+		log.Printf("action %v, cooldowns %v\n", actType, actionCDs)
 	}
 
-	g.handleAction(s, action{act, arg})
+	g.handleAction(Action{pl, actType, arg})
 
 	return nil
 }
@@ -620,20 +615,17 @@ func (g *Game) Move(s Session, direc Direction) error {
 	return g.UserAction(s, Move, int16(direc))
 }
 
-func (g *Game) handleAction(s Session, act action) {
-	pl := s.Player()
+func (g *Game) handleAction(act Action) {
+	pl := act.Player
 	if pl == nil {
 		return
 	}
 
-	user := s.UserName()
+	user := pl.S.UserName()
 	lvl := g.Level
 
 	switch act.Type {
 	case Move:
-		// var di, dj int
-		// dir := "<unknown>"
-
 		direc := Direction(act.Arg)
 		di, dj, _, _ := direc.Vectors()
 		dir := direc.Name()
@@ -690,15 +682,14 @@ func (g *Game) loopInner() {
 	/*** Game loop ***/
 
 	// user actions
-	for _, s := range g.Active {
-		act := g.actions[s]
+	for _, act := range g.pendingActions {
 		if act.Type == Nothing {
 			continue
 		}
 
-		g.actions[s] = action{}
-		g.handleAction(s, act)
+		g.handleAction(act)
 	}
+	g.pendingActions = g.pendingActions[:0]
 
 	// update rooms
 
