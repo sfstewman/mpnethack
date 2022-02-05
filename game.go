@@ -75,6 +75,25 @@ func (direc Direction) Name() string {
 	return fmt.Sprintf("Direction[%d]", direc)
 }
 
+func (direc Direction) Vectors() (ui, uj, vi, vj int) {
+	switch direc {
+	case Up:
+		ui, uj = -1, 0
+		vi, vj = 0, 1
+	case Down:
+		ui, uj = 1, 0
+		vi, vj = 0, -1
+	case Left:
+		ui, uj = 0, -1
+		vi, vj = -1, 0
+	case Right:
+		ui, uj = 0, 1
+		vi, vj = 1, 0
+	}
+
+	return
+}
+
 var UserActionCooldownTicks = [MaxActionType]uint64{
 	Nothing: 0,
 	Move:    1,
@@ -612,25 +631,12 @@ func (g *Game) handleAction(s Session, act action) {
 
 	switch act.Type {
 	case Move:
-		di := 0
-		dj := 0
-		dir := "<unknown>"
+		// var di, dj int
+		// dir := "<unknown>"
 
 		direc := Direction(act.Arg)
-		switch direc {
-		case Left:
-			dir = "left"
-			dj = -1
-		case Right:
-			dir = "right"
-			dj = 1
-		case Up:
-			dir = "up"
-			di = -1
-		case Down:
-			dir = "down"
-			di = 1
-		}
+		di, dj, _, _ := direc.Vectors()
+		dir := direc.Name()
 
 		newI := pl.I + di
 		newJ := pl.J + dj
@@ -767,22 +773,13 @@ func (g *Game) loopInner() {
 				pl.SwingState--
 			}
 
-			var ui, uj, vi, vj int
-			switch pl.SwingFacing {
-			case Up:
-				ui, uj = -1, 0
-				vi, vj = 0, 1
-			case Down:
-				ui, uj = 1, 0
-				vi, vj = 0, -1
-			case Left:
-				ui, uj = 0, -1
-				vi, vj = -1, 0
-			case Right:
-				ui, uj = 0, 1
-				vi, vj = 1, 0
+			weaponItem := pl.Weapon
+			if weaponItem == nil {
+				weaponItem = BareHands
 			}
 
+			shortName := weaponItem.ShortName()
+			ui, uj, vi, vj := pl.SwingFacing.Vectors()
 			var swDI, swDJ int
 			switch pl.SwingState {
 			case 3:
@@ -818,13 +815,6 @@ func (g *Game) loopInner() {
 			if pl.SwingState > 0 {
 				coll := g.hasCollision(swI, swJ)
 				if coll != nil && pl.SwingTick == 0 {
-					weaponItem := pl.Weapon
-					if weaponItem == nil {
-						weaponItem = BareHands
-					}
-
-					shortName := weaponItem.ShortName()
-
 					switch victim := coll.(type) {
 					case *Mob:
 						if victim.IsAlive() {
