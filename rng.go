@@ -49,6 +49,11 @@ func (d Dice) Roll(m, n int) int {
 		return 0
 	}
 
+	// Md1 is always M
+	if n == 1 {
+		return m
+	}
+
 	acc := 0
 	for i := 0; i < m; i++ {
 		num := d.rng.Intn(n) + 1

@@ -161,6 +161,10 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		}
 	}
 
+	deadMobStyle := tcell.StyleDefault.
+		Background(tcell.ColorWhite).
+		Foreground(tcell.ColorRed)
+
 	mobStyle := tcell.StyleDefault.
 		Background(tcell.ColorRed).
 		Foreground(tcell.ColorWhite)
@@ -174,8 +178,13 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 			ch = '@'
 		}
 
+		sty := mobStyle
+		if !mob.IsAlive() {
+			sty = deadMobStyle
+		}
+
 		if x >= x0 && x < (x0+w) && y >= y0 && y < (y0+h) { // m.InRect(x, y) {
-			screen.SetContent(x, y, ch, nil, mobStyle)
+			screen.SetContent(x, y, ch, nil, sty)
 		}
 
 		if m.first {

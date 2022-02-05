@@ -162,6 +162,8 @@ type Unit interface {
 	GetPos() (i int, j int, h int, w int)
 
 	GetStats() *UnitStats
+
+	IsAlive() bool
 }
 
 type MobType uint32
@@ -219,6 +221,20 @@ type Mob struct {
 	States [5]int16
 }
 
+func (m *Mob) TakeDamage(dmg int) {
+	hp := m.Stats.HP - dmg
+	if hp < 0 {
+		hp = 0
+		m.Direc = NoDirection
+	}
+
+	m.Stats.HP = hp
+}
+
+func (m *Mob) IsAlive() bool {
+	return m.Stats.HP > 0
+}
+
 func (m *Mob) GetStats() *UnitStats {
 	return &m.Stats
 }
@@ -226,11 +242,18 @@ func (m *Mob) GetStats() *UnitStats {
 func (m *Mob) Name() string {
 	info := LookupMobInfo(m.Type)
 
+	var n string
 	if info != nil {
-		return info.Name
+		n = info.Name
+	} else {
+		n = "Mob_Unknown"
 	}
 
-	return "Mob_Unknown"
+	if m.IsAlive() {
+		return n
+	} else {
+		return "dead " + n
+	}
 }
 
 func (m *Mob) GetMarker() rune {
@@ -264,6 +287,9 @@ type Player struct {
 	I, J   int
 	Marker rune
 	Facing Direction
+
+	Inventory []Item
+	Weapon    Item
 
 	Cooldowns []uint64
 
@@ -469,11 +495,13 @@ func (g *Game) PlayerJoin(sess Session) (*Player, error) {
 	}
 
 	pl := &Player{
-		I:      g.Level.PlayerI0, // i0,
-		J:      g.Level.PlayerJ0, // j0,
-		Marker: marker,
-		S:      sess,
-		Facing: Up,
+		I:         g.Level.PlayerI0, // i0,
+		J:         g.Level.PlayerJ0, // j0,
+		Marker:    marker,
+		S:         sess,
+		Facing:    Up,
+		Weapon:    RustySword,
+		Inventory: []Item{},
 		Stats: UnitStats{
 			ArmorClass: 10,
 			THAC0:      0,
@@ -790,21 +818,55 @@ func (g *Game) loopInner() {
 			if pl.SwingState > 0 {
 				coll := g.hasCollision(swI, swJ)
 				if coll != nil && pl.SwingTick == 0 {
+					weaponItem := pl.Weapon
+					if weaponItem == nil {
+						weaponItem = BareHands
+					}
 
-					switch obj := coll.(type) {
+					shortName := weaponItem.ShortName()
+
+					switch victim := coll.(type) {
 					case *Mob:
-						toHit := pl.GetStats().ToHit(obj.GetStats())
-						if g.Dice.RollD20() <= toHit {
-							dmg := g.Dice.Roll(2, 4)
-							g.messagef(chat.Game, "%s slashes %s with his rusty sword for %d damage", pl.Name(), coll.Name(), dmg)
+						if victim.IsAlive() {
+							stats := victim.GetStats()
+							toHit := pl.GetStats().ToHit(stats)
+
+							var dmg int
+							switch w := weaponItem.(type) {
+							case *MeleeWeapon:
+								dmg = w.Damage(victim, g.Dice)
+							case Item:
+								dmg = 1
+							}
+
+							if g.Dice.RollD20() <= toHit {
+								g.messagef(chat.Game, "%s slashes %s with a %s for %d damage", pl.Name(), coll.Name(), shortName, dmg)
+
+								victim.TakeDamage(dmg)
+
+								if !victim.IsAlive() {
+									g.messagef(chat.Game, "%s killed %s", pl.Name(), coll.Name())
+								}
+							} else {
+								g.messagef(chat.Game, "%s swings wildy at %s with a %s but misses", pl.Name(), coll.Name(), shortName)
+							}
 						} else {
-							g.messagef(chat.Game, "%s swings wildy at %s but misses", pl.Name(), coll.Name())
+							g.messagef(chat.Game, "%s swings the %s futility at the %s.",
+								pl.Name(), shortName, coll.Name())
 						}
+
 					case Marker:
-						g.messagef(chat.Game, "%s slashes at the %s.  Thankfully this sword can't get any less sharp.", pl.Name(), coll.Name())
+						if w, ok := weaponItem.(*MeleeWeapon); ok && len(w.HitObjectDescription) > 0 {
+							g.messagef(chat.Game, "%s swings the %s futility at the %s.  %s",
+								pl.Name(), shortName, coll.Name(), w.HitObjectDescription)
+						} else {
+							g.messagef(chat.Game, "%s swings the %s futility at the %s.",
+								pl.Name(), shortName, coll.Name())
+						}
+
 					case *Player:
-						_ = obj
-						g.messagef(chat.Game, "The sword of %s collides with %s, who looks very miffed.", pl.Name(), coll.Name())
+						g.messagef(chat.Game, "%s thwacks %s with the %s.  %s looks very miffed.",
+							pl.Name(), coll.Name(), shortName, coll.Name())
 					}
 				}
 

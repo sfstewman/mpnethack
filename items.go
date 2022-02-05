@@ -6,10 +6,12 @@ type Money struct {
 	Copper int
 }
 
-type ItemKind int
+type ItemId int
 
 type Item interface {
 	Namer
+
+	Id() ItemId
 
 	ShortName() string
 	Description() string
@@ -20,10 +22,15 @@ type Item interface {
 }
 
 type BasicItem struct {
+	id          ItemId
 	name        string
 	shortName   string
 	description string
 	weight      int
+}
+
+func (itm *BasicItem) Id() ItemId {
+	return itm.id
 }
 
 func (itm *BasicItem) Name() string {
@@ -47,6 +54,8 @@ var _ Item = &BasicItem{}
 type MeleeWeapon struct {
 	BasicItem
 
+	HitObjectDescription string
+
 	damage      Roll
 	swingArc    int
 	swingLength int
@@ -66,3 +75,42 @@ func (w *MeleeWeapon) SwingStats() (arc int, length int, ticks int) {
 }
 
 var _ Item = &MeleeWeapon{}
+
+const (
+	RustySwordId ItemId = 1000 + iota // FIXME: just some value
+	BareHandsId
+)
+
+var RustySword = &MeleeWeapon{
+	BasicItem: BasicItem{
+		id:          RustySwordId,
+		name:        "rusty sword",
+		shortName:   "rusty sword",
+		description: "An old sword, made with neither skill nor care.  The blade is pitted and rusty, but serves as an awkward club.",
+		weight:      5,
+	},
+
+	HitObjectDescription: "Thankfully this sword can't get any duller.",
+
+	damage:      Roll{M: 1, N: 4},
+	swingArc:    1,
+	swingLength: 1,
+	swingTicks:  3,
+}
+
+var BareHands = &MeleeWeapon{
+	BasicItem: BasicItem{
+		id:          BareHandsId,
+		name:        "bare hards",
+		shortName:   "bare hands",
+		description: "Your fists.  The only thing that beats the personal touch of hired goons.",
+		weight:      0,
+	},
+
+	HitObjectDescription: "Thankfully this sword can't get any duller.",
+
+	damage:      Roll{M: 1, N: 1},
+	swingArc:    0,
+	swingLength: 1,
+	swingTicks:  2,
+}
