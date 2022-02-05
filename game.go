@@ -682,6 +682,107 @@ func (g *Game) handleAction(act Action) {
 	}
 }
 
+func (g *Game) playerAttack(pl *Player) {
+	weaponItem := pl.Weapon
+	if weaponItem == nil {
+		weaponItem = BareHands
+	}
+
+	shortName := weaponItem.ShortName()
+	ui, uj, vi, vj := pl.SwingFacing.Vectors()
+	var swDI, swDJ int
+	switch pl.SwingState {
+	case 3:
+		swDI, swDJ = ui+vi, uj+vj
+	case 2:
+		swDI, swDJ = ui, uj
+	case 1:
+		swDI, swDJ = ui-vi, uj-vj
+
+	case 0:
+		pl.SwingRate = 0
+		pl.SwingTick = 0
+		pl.SwingFacing = NoDirection
+	}
+
+	var swordRune rune
+	if swDJ == 0 {
+		swordRune = '|'
+	} else if swDI == 0 {
+		swordRune = '-'
+	} else if swDI == -swDJ {
+		swordRune = '/'
+	} else if swDI == swDJ {
+		swordRune = '\\'
+	} else {
+		log.Printf("invalid sword state?")
+		return
+	}
+
+	swI := pl.I + swDI
+	swJ := pl.J + swDJ
+
+	if pl.SwingState > 0 {
+		coll := g.hasCollision(swI, swJ)
+		if coll != nil && pl.SwingTick == 0 {
+			switch victim := coll.(type) {
+			case *Mob:
+				if victim.IsAlive() {
+					stats := victim.GetStats()
+					toHit := pl.GetStats().ToHit(stats)
+
+					var dmg int
+					switch w := weaponItem.(type) {
+					case *MeleeWeapon:
+						dmg = w.Damage(victim, g.Dice)
+					case Item:
+						dmg = 1
+					}
+
+					if g.Dice.RollD20() <= toHit {
+						g.messagef(chat.Game, "%s slashes %s with a %s for %d damage", pl.Name(), coll.Name(), shortName, dmg)
+
+						victim.TakeDamage(dmg)
+
+						if !victim.IsAlive() {
+							g.messagef(chat.Game, "%s killed %s", pl.Name(), coll.Name())
+						}
+					} else {
+						g.messagef(chat.Game, "%s swings wildy at %s with a %s but misses", pl.Name(), coll.Name(), shortName)
+					}
+				} else {
+					g.messagef(chat.Game, "%s swings the %s futility at the %s.",
+						pl.Name(), shortName, coll.Name())
+				}
+
+			case Marker:
+				if w, ok := weaponItem.(*MeleeWeapon); ok && len(w.HitObjectDescription) > 0 {
+					g.messagef(chat.Game, "%s swings the %s futility at the %s.  %s",
+						pl.Name(), shortName, coll.Name(), w.HitObjectDescription)
+				} else {
+					g.messagef(chat.Game, "%s swings the %s futility at the %s.",
+						pl.Name(), shortName, coll.Name())
+				}
+
+			case *Player:
+				g.messagef(chat.Game, "%s thwacks %s with the %s.  %s looks very miffed.",
+					pl.Name(), coll.Name(), shortName, coll.Name())
+			}
+		}
+
+		g.EffectsOverlay = append(g.EffectsOverlay, Effect{
+			I:         swI,
+			J:         swJ,
+			Rune:      swordRune,
+			Collision: coll,
+		})
+
+		if pl.SwingTick == 0 {
+			pl.SwingTick = pl.SwingRate
+		}
+	}
+}
+
 func (g *Game) loopInner() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -701,6 +802,24 @@ func (g *Game) loopInner() {
 	g.pendingActions = g.pendingActions[:0]
 
 	// update rooms
+
+	g.EffectsOverlay = g.EffectsOverlay[:0]
+
+	// player actions
+	for _, pl := range g.Players {
+		if pl.BusyTick > 0 {
+			pl.BusyTick--
+		}
+
+		if pl.SwingState > 0 && pl.SwingFacing != NoDirection {
+			pl.SwingTick--
+			if pl.SwingTick == 0 {
+				pl.SwingState--
+			}
+
+			g.playerAttack(pl)
+		}
+	}
 
 	// update mobs
 	for i := range g.Mobs {
@@ -744,121 +863,6 @@ func (g *Game) loopInner() {
 
 			mob.I = i1
 			mob.J = j1
-		}
-	}
-
-	g.EffectsOverlay = g.EffectsOverlay[:0]
-
-	// player actions
-	for _, pl := range g.Players {
-		if pl.BusyTick > 0 {
-			pl.BusyTick--
-		}
-
-		if pl.SwingState > 0 && pl.SwingFacing != NoDirection {
-			pl.SwingTick--
-			if pl.SwingTick == 0 {
-				pl.SwingState--
-			}
-
-			weaponItem := pl.Weapon
-			if weaponItem == nil {
-				weaponItem = BareHands
-			}
-
-			shortName := weaponItem.ShortName()
-			ui, uj, vi, vj := pl.SwingFacing.Vectors()
-			var swDI, swDJ int
-			switch pl.SwingState {
-			case 3:
-				swDI, swDJ = ui+vi, uj+vj
-			case 2:
-				swDI, swDJ = ui, uj
-			case 1:
-				swDI, swDJ = ui-vi, uj-vj
-
-			case 0:
-				pl.SwingRate = 0
-				pl.SwingTick = 0
-				pl.SwingFacing = NoDirection
-			}
-
-			var swordRune rune
-			if swDJ == 0 {
-				swordRune = '|'
-			} else if swDI == 0 {
-				swordRune = '-'
-			} else if swDI == -swDJ {
-				swordRune = '/'
-			} else if swDI == swDJ {
-				swordRune = '\\'
-			} else {
-				log.Printf("invalid sword state?")
-				continue
-			}
-
-			swI := pl.I + swDI
-			swJ := pl.J + swDJ
-
-			if pl.SwingState > 0 {
-				coll := g.hasCollision(swI, swJ)
-				if coll != nil && pl.SwingTick == 0 {
-					switch victim := coll.(type) {
-					case *Mob:
-						if victim.IsAlive() {
-							stats := victim.GetStats()
-							toHit := pl.GetStats().ToHit(stats)
-
-							var dmg int
-							switch w := weaponItem.(type) {
-							case *MeleeWeapon:
-								dmg = w.Damage(victim, g.Dice)
-							case Item:
-								dmg = 1
-							}
-
-							if g.Dice.RollD20() <= toHit {
-								g.messagef(chat.Game, "%s slashes %s with a %s for %d damage", pl.Name(), coll.Name(), shortName, dmg)
-
-								victim.TakeDamage(dmg)
-
-								if !victim.IsAlive() {
-									g.messagef(chat.Game, "%s killed %s", pl.Name(), coll.Name())
-								}
-							} else {
-								g.messagef(chat.Game, "%s swings wildy at %s with a %s but misses", pl.Name(), coll.Name(), shortName)
-							}
-						} else {
-							g.messagef(chat.Game, "%s swings the %s futility at the %s.",
-								pl.Name(), shortName, coll.Name())
-						}
-
-					case Marker:
-						if w, ok := weaponItem.(*MeleeWeapon); ok && len(w.HitObjectDescription) > 0 {
-							g.messagef(chat.Game, "%s swings the %s futility at the %s.  %s",
-								pl.Name(), shortName, coll.Name(), w.HitObjectDescription)
-						} else {
-							g.messagef(chat.Game, "%s swings the %s futility at the %s.",
-								pl.Name(), shortName, coll.Name())
-						}
-
-					case *Player:
-						g.messagef(chat.Game, "%s thwacks %s with the %s.  %s looks very miffed.",
-							pl.Name(), coll.Name(), shortName, coll.Name())
-					}
-				}
-
-				g.EffectsOverlay = append(g.EffectsOverlay, Effect{
-					I:         swI,
-					J:         swJ,
-					Rune:      swordRune,
-					Collision: coll,
-				})
-
-				if pl.SwingTick == 0 {
-					pl.SwingTick = pl.SwingRate
-				}
-			}
 		}
 	}
 
