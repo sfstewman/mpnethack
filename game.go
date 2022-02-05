@@ -310,6 +310,8 @@ type Player struct {
 
 	Stats UnitStats
 
+	BusyTick uint16
+
 	SwingRate   uint16
 	SwingTick   uint16
 	SwingState  uint16
@@ -591,6 +593,10 @@ func (g *Game) UserAction(s Session, actType ActionType, arg int16) error {
 	pl := s.Player()
 	actionCDs := pl.Cooldowns
 
+	if pl.BusyTick > 0 || pl.SwingState > 0 {
+		return OnCooldownError
+	}
+
 	if len(actionCDs) == 0 {
 		actionCDs = make([]uint64, len(UserActionCooldownTicks))
 		pl.Cooldowns = actionCDs
@@ -635,6 +641,13 @@ func (g *Game) handleAction(act Action) {
 
 	user := pl.S.UserName()
 	lvl := g.Level
+
+	if pl.BusyTick > 0 {
+		return
+	}
+
+	// General cooldown timer
+	pl.BusyTick = 1
 
 	switch act.Type {
 	case Move:
@@ -738,6 +751,10 @@ func (g *Game) loopInner() {
 
 	// player actions
 	for _, pl := range g.Players {
+		if pl.BusyTick > 0 {
+			pl.BusyTick--
+		}
+
 		if pl.SwingState > 0 && pl.SwingFacing != NoDirection {
 			pl.SwingTick--
 			if pl.SwingTick == 0 {
