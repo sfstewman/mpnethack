@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log"
 
 	tcell "github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -28,6 +29,7 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 	x0, y0, w, h := fr.GetInnerRect()
 
 	session := fr.UI.Session
+	pl := session.Player()
 
 	adminStr := ""
 	if session.IsAdministrator() {
@@ -58,18 +60,32 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 	fr.cooldowns = g.GetCooldowns(session, fr.cooldowns)
 	cooldowns := fr.cooldowns
 
+	attackCooldown := int(pl.BusyTick)
+	if pl.SwingState > 0 {
+		wait := int(pl.SwingRate)*(int(pl.SwingState)-1) + int(pl.SwingTick)
+		if wait > attackCooldown {
+			attackCooldown = wait
+		}
+
+		if attackCooldown < 0 {
+			log.Printf("negative cooldown! cd=%d,rate=%d,state=%d,tick=%d, busy=%d",
+				attackCooldown, pl.SwingRate, pl.SwingState, pl.SwingTick, pl.BusyTick)
+			attackCooldown = 0
+		}
+	}
+
 	for actInd, nticks := range cooldowns {
 		act := mpnethack.ActionType(actInd)
 
 		var s string
 		switch act {
-		case mpnethack.Nothing:
+		case mpnethack.Nothing, mpnethack.Move:
 			continue
 
-		case mpnethack.Move:
-			s = "MV "
 		case mpnethack.Attack:
 			s = "ATT"
+			nticks = uint32(attackCooldown)
+
 		case mpnethack.Defend:
 			s = "DEF"
 		default:
@@ -94,12 +110,14 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 		case nticks > 50:
 			prog = fmt.Sprintf("<==%d==>", nticks/10)
 		case nticks > 20:
-			prog = "<===>"
+			prog = "<====>"
 		case nticks > 15:
-			prog = "<==>"
+			prog = "<===>"
 		case nticks > 10:
-			prog = "<=>"
+			prog = "<==>"
 		case nticks > 5:
+			prog = "<=>"
+		case nticks > 2:
 			prog = "<>"
 		case nticks == 0:
 			prog = ""
