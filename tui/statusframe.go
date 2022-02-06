@@ -74,6 +74,8 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 		}
 	}
 
+	playerDead := !pl.IsAlive()
+
 	for actInd, nticks := range cooldowns {
 		act := mpnethack.ActionType(actInd)
 
@@ -107,6 +109,8 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 
 		prog := ""
 		switch {
+		case playerDead:
+			prog = " [yellow:]dead[-:-]"
 		case nticks > 50:
 			prog = fmt.Sprintf("<==%d==>", nticks/10)
 		case nticks > 20:
@@ -124,7 +128,7 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 		}
 
 		var tag string = "[::b]"
-		if nticks > 0 {
+		if playerDead || nticks > 0 {
 			tag = ""
 		}
 
@@ -142,4 +146,27 @@ func (fr *StatusFrame) Draw(screen tcell.Screen) {
 		// ... HANDLE BETTER ...
 		return
 	}
+
+	{
+		stats := pl.GetStats()
+
+		tag := ""
+		if stats.HP < 3 {
+			tag = "[red:]"
+		}
+		tview.Print(screen, fmt.Sprintf("%sHealth %d[-:-]", tag, stats.HP), x0, y, w, tview.AlignLeft, tcell.ColorWhite)
+
+		if y++; y >= ymax {
+			// ... handle better ...
+			return
+		}
+	}
+
+	DrawHorizontalDivider(fr.Box, screen, y)
+
+	if y++; y >= ymax {
+		// ... HANDLE BETTER ...
+		return
+	}
+
 }

@@ -39,6 +39,9 @@ const (
 
 	MarkerBorder Marker = Marker(uint32(MarkerBounds)<<24 | 0)
 	MarkerWall   Marker = Marker(uint32(MarkerBounds)<<24 | 1)
+
+	// placeholder
+	MarkerCactus Marker = Marker(uint32(MarkerObject)<<24 | 23)
 )
 
 func (m Marker) Name() string {
@@ -51,6 +54,8 @@ func (m Marker) Name() string {
 		return "a border of the world"
 	case MarkerWall:
 		return "a wall"
+	case MarkerCactus:
+		return "a cactus"
 	}
 
 	var arch string

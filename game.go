@@ -94,6 +94,21 @@ func (direc Direction) Vectors() (ui, uj, vi, vj int) {
 	return
 }
 
+func (direc Direction) Mirror() Direction {
+	switch direc {
+	case Up:
+		return Down
+	case Down:
+		return Up
+	case Left:
+		return Right
+	case Right:
+		return Left
+	default:
+		return NoDirection
+	}
+}
+
 var UserActionCooldownTicks = [MaxActionType]uint64{
 	Nothing: 0,
 	Move:    1,
@@ -161,9 +176,11 @@ type Namer interface {
 }
 
 type UnitStats struct {
-	ArmorClass int
-	THAC0      int
-	HP         int
+	ArmorClass         int
+	THAC0              int
+	HP                 int
+	MaxHP              int
+	HealthRecoveryRate uint16
 }
 
 func (s *UnitStats) ToHit(other *UnitStats) int {
@@ -178,6 +195,7 @@ type Unit interface {
 
 	GetStats() *UnitStats
 
+	TakeDamage(dmg int)
 	IsAlive() bool
 }
 
@@ -310,7 +328,8 @@ type Player struct {
 
 	Stats UnitStats
 
-	BusyTick uint16
+	BusyTick   uint16
+	HealthTick uint16
 
 	SwingRate   uint16
 	SwingTick   uint16
@@ -320,6 +339,27 @@ type Player struct {
 
 func (p *Player) GetStats() *UnitStats {
 	return &p.Stats
+}
+
+func (p *Player) IsAlive() bool {
+	return p.Stats.HP > 0
+}
+
+func (p *Player) TakeDamage(dmg int) {
+	hp := p.Stats.HP - dmg
+	if hp <= 0 {
+		hp = 0
+		p.BusyTick = 0
+		p.HealthTick = 0
+		p.SwingTick = 0
+		p.SwingState = 0
+		p.SwingFacing = NoDirection
+	}
+
+	p.Stats.HP = hp
+	if hp < p.Stats.MaxHP {
+		p.HealthTick = p.Stats.HealthRecoveryRate
+	}
 }
 
 func (p *Player) Name() string {
@@ -519,9 +559,11 @@ func (g *Game) PlayerJoin(sess Session) (*Player, error) {
 		Weapon:    RustySword,
 		Inventory: []Item{},
 		Stats: UnitStats{
-			ArmorClass: 10,
-			THAC0:      0,
-			HP:         16,
+			ArmorClass:         10,
+			THAC0:              0,
+			HP:                 16,
+			MaxHP:              16,
+			HealthRecoveryRate: 50,
 		},
 	}
 
@@ -593,7 +635,7 @@ func (g *Game) UserAction(s Session, actType ActionType, arg int16) error {
 	pl := s.Player()
 	actionCDs := pl.Cooldowns
 
-	if pl.BusyTick > 0 || pl.SwingState > 0 {
+	if pl.BusyTick > 0 || pl.SwingState > 0 || !pl.IsAlive() {
 		return OnCooldownError
 	}
 
@@ -659,7 +701,16 @@ func (g *Game) handleAction(act Action) {
 		newJ := clipCoord(pl.J+dj, 0, lvl.W)
 
 		if what := g.hasCollision(newI, newJ); what != nil {
+
 			g.messagef(chat.Game, "%s tried to move %s but hit a %s", user, dir, what.Name())
+			switch obj := what.(type) {
+			case Marker:
+				if obj == MarkerCactus {
+					pl.TakeDamage(2)
+					g.messagef(chat.Game, "Ouch!  %s takes %d damage from %s", user, 2, what.Name())
+				}
+			default:
+			}
 		} else {
 			pl.I = newI
 			pl.J = newJ
@@ -764,6 +815,10 @@ func (g *Game) playerAttack(pl *Player) {
 						pl.Name(), shortName, coll.Name())
 				}
 
+				// Stop swing
+				pl.SwingTick = 0
+				pl.SwingState = 0
+
 			case *Player:
 				g.messagef(chat.Game, "%s thwacks %s with the %s.  %s looks very miffed.",
 					pl.Name(), coll.Name(), shortName, coll.Name())
@@ -777,7 +832,7 @@ func (g *Game) playerAttack(pl *Player) {
 			Collision: coll,
 		})
 
-		if pl.SwingTick == 0 {
+		if pl.SwingTick == 0 && pl.SwingState > 0 {
 			pl.SwingTick = pl.SwingRate
 		}
 	}
@@ -809,6 +864,17 @@ func (g *Game) loopInner() {
 	for _, pl := range g.Players {
 		if pl.BusyTick > 0 {
 			pl.BusyTick--
+		}
+
+		if tick := pl.HealthTick; tick > 0 {
+			tick--
+			if tick == 0 && pl.Stats.HP < pl.Stats.MaxHP {
+				pl.Stats.HP++
+				if pl.Stats.HP < pl.Stats.MaxHP {
+					tick = pl.Stats.HealthRecoveryRate
+				}
+			}
+			pl.HealthTick = tick
 		}
 
 		if pl.SwingState > 0 && pl.SwingFacing != NoDirection {

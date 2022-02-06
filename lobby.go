@@ -20,15 +20,19 @@ func (l *Lobby) NewGame(sess Session) (*Game, error) {
 	lvl.PlayerJ0 = 128 / 2
 
 	lemmingStats := UnitStats{
-		ArmorClass: 8,
-		THAC0:      4,
-		HP:         10,
+		ArmorClass:         8,
+		THAC0:              4,
+		HP:                 10,
+		MaxHP:              10,
+		HealthRecoveryRate: 200,
 	}
 
 	viciousLemmingStats := UnitStats{
-		ArmorClass: 8,
-		THAC0:      6,
-		HP:         14,
+		ArmorClass:         8,
+		THAC0:              6,
+		HP:                 14,
+		MaxHP:              14,
+		HealthRecoveryRate: 200,
 	}
 
 	lvl.AddMob(MobLemming, lemmingStats, 18, 34, Down)
@@ -37,6 +41,9 @@ func (l *Lobby) NewGame(sess Session) (*Game, error) {
 	lvl.AddMob(MobViciousLemming, viciousLemmingStats, 18, 92, Left)
 
 	lvl.AddMob(MobViciousLemming, viciousLemmingStats, lvl.PlayerI0, lvl.PlayerJ0+3, NoDirection)
+
+	lvl.Set(lvl.PlayerI0, lvl.PlayerJ0-3, MarkerCactus)
+	lvl.Set(lvl.PlayerI0-2, lvl.PlayerJ0, MarkerCactus)
 
 	g, err := NewGame(lvl)
 	if err != nil {

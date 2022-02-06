@@ -32,6 +32,7 @@ func NewMapArea(session mpnethack.Session /* session *Session */ /* ui *UI */) *
 const (
 	VoidChar   rune = '\u2591'
 	BorderChar rune = '\u2580'
+	CactusChar rune = '%' // '\U0001F335'
 )
 
 func (m *MapArea) Draw(screen tcell.Screen) {
@@ -91,7 +92,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		lvlJ1 = w - deltaJ
 	}
 
-	style := tcell.StyleDefault.
+	defaultStyle := tcell.StyleDefault.
 		Background(tview.Styles.PrimitiveBackgroundColor).
 		Foreground(tcell.ColorWhite)
 	// Foreground(clr)
@@ -106,6 +107,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		for j := lvlJ0; j < lvlJ1; j++ {
 			x := x0 + j + deltaJ
 
+			sty := defaultStyle
 			var ch rune
 			what := lvl.Get(i, j)
 			switch what {
@@ -121,11 +123,14 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 			case mpnethack.MarkerWall:
 				ch = BorderChar // FIXME: can do better!
 				numWall++
+			case mpnethack.MarkerCactus:
+				ch = CactusChar
+				sty = defaultStyle.Foreground(tcell.ColorGreen)
 			default:
 				ch = '@'
 			}
 
-			screen.SetContent(x, y, ch, nil, style)
+			screen.SetContent(x, y, ch, nil, sty)
 
 			size++
 		}
