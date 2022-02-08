@@ -35,12 +35,12 @@ func (l *Lobby) NewGame(sess Session) (*Game, error) {
 		HealthRecoveryRate: 200,
 	}
 
-	lvl.AddMob(MobLemming, lemmingStats, 18, 34, Down)
-	lvl.AddMob(MobLemming, lemmingStats, 18, 45, Right)
-	lvl.AddMob(MobLemming, lemmingStats, 45, 92, Up)
-	lvl.AddMob(MobViciousLemming, viciousLemmingStats, 18, 92, Left)
+	lvl.AddMob(MobLemming, lemmingStats, 18, 34, Down, MobPatrol)
+	lvl.AddMob(MobLemming, lemmingStats, 18, 45, Right, MobPatrol)
+	lvl.AddMob(MobLemming, lemmingStats, 45, 92, Up, MobPatrol)
+	lvl.AddMob(MobViciousLemming, viciousLemmingStats, 18, 92, Left, MobWander)
 
-	lvl.AddMob(MobViciousLemming, viciousLemmingStats, lvl.PlayerI0, lvl.PlayerJ0+3, NoDirection)
+	lvl.AddMob(MobViciousLemming, viciousLemmingStats, lvl.PlayerI0, lvl.PlayerJ0+3, Right /* NoDirection */, MobSentry)
 
 	lvl.Set(lvl.PlayerI0, lvl.PlayerJ0-3, MarkerCactus)
 	lvl.Set(lvl.PlayerI0-2, lvl.PlayerJ0, MarkerCactus)

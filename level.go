@@ -183,29 +183,24 @@ func SingleRoomLevel(height, width, roomHeight, roomWidth int) *Level {
 	return lvl
 }
 
-func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc Direction, args ...int16) {
+func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc Direction, state MobState, args ...int16) {
 	info := LookupMobInfo(mobType)
 
-	var moveTick uint16
+	var moveRate int16
 	if info != nil {
-		moveTick = info.MoveTicks
+		moveRate = info.MoveRate
 	}
 
 	m := Mob{
-		I:        i,
-		J:        j,
-		Stats:    stats,
-		Type:     mobType,
-		Direc:    direc,
-		MoveTick: moveTick,
-	}
-
-	for i := 0; i < len(args); i++ {
-		if i >= len(m.States) {
-			break
-		}
-
-		m.States[i] = args[i]
+		I:          i,
+		J:          j,
+		Stats:      stats,
+		Type:       mobType,
+		MoveTick:   moveRate,
+		Direc:      direc,
+		Weapon:     info.DefaultWeapon,
+		State:      state,
+		Aggression: info.DefaultAggression,
 	}
 
 	l.Mobs = append(l.Mobs, m)

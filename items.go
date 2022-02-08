@@ -79,6 +79,7 @@ var _ Item = &MeleeWeapon{}
 const (
 	RustySwordId ItemId = 1000 + iota // FIXME: just some value
 	BareHandsId
+	LemmingClawsId
 )
 
 var RustySword = &MeleeWeapon{
@@ -112,5 +113,22 @@ var BareHands = &MeleeWeapon{
 	damage:      Roll{M: 1, N: 1},
 	swingArc:    0,
 	swingLength: 1,
-	swingTicks:  2,
+	swingTicks:  6,
+}
+
+var LemmingClaws = &MeleeWeapon{
+	BasicItem: BasicItem{
+		id:          LemmingClawsId,
+		name:        "lemming claws",
+		shortName:   "claws",
+		description: "Sharp, scary lemming claws",
+		weight:      0,
+	},
+
+	HitObjectDescription: "Thankfully this sword can't get any duller.",
+
+	damage:      Roll{M: 1, N: 4},
+	swingArc:    0,
+	swingLength: 1,
+	swingTicks:  12,
 }

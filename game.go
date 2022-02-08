@@ -180,7 +180,7 @@ type UnitStats struct {
 	THAC0              int
 	HP                 int
 	MaxHP              int
-	HealthRecoveryRate uint16
+	HealthRecoveryRate int16
 }
 
 func (s *UnitStats) ToHit(other *UnitStats) int {
@@ -195,7 +195,7 @@ type Unit interface {
 
 	GetStats() *UnitStats
 
-	TakeDamage(dmg int)
+	TakeDamage(dmg int, u Unit)
 	IsAlive() bool
 }
 
@@ -208,7 +208,18 @@ type MobInfo struct {
 	Marker rune
 	W, H   int
 
-	MoveTicks uint16
+	MoveRate       int16
+	ChaseRate      int16
+	SeekTargetRate int16
+
+	DefaultWeapon     Item
+	DefaultAggression Aggression
+
+	ViewDistance int
+	FieldOfView  int
+
+	InitialState    MobState
+	InitialStateArg int
 }
 
 const (
@@ -217,8 +228,36 @@ const (
 )
 
 var mobTypes = []MobInfo{
-	MobInfo{Type: MobLemming, Name: "Lemming", Marker: 'L', MoveTicks: 10},
-	MobInfo{Type: MobViciousLemming, Name: "Vicious lemming", Marker: 'V', MoveTicks: 5},
+	MobInfo{
+		Type:              MobLemming,
+		Name:              "Lemming",
+		Marker:            'L',
+		W:                 1,
+		H:                 1,
+		MoveRate:          10,
+		ChaseRate:         8,
+		SeekTargetRate:    300,
+		DefaultWeapon:     LemmingClaws,
+		DefaultAggression: AggressionDefends,
+		ViewDistance:      3,
+		FieldOfView:       3,
+		InitialState:      MobPatrol,
+	},
+	MobInfo{
+		Type:              MobViciousLemming,
+		Name:              "Vicious lemming",
+		Marker:            'V',
+		W:                 1,
+		H:                 1,
+		MoveRate:          5,
+		ChaseRate:         3,
+		SeekTargetRate:    200,
+		DefaultWeapon:     LemmingClaws,
+		DefaultAggression: AggressionAttacks,
+		ViewDistance:      3,
+		FieldOfView:       3,
+		InitialState:      MobPatrol,
+	},
 }
 
 func AddMobType(info MobInfo) MobType {
@@ -239,22 +278,142 @@ func LookupMobInfo(mt MobType) *MobInfo {
 	return &mobTypes[ind]
 }
 
+type MobEvent int
+
+const (
+	// No events have happened to this mob
+	MobEventNone MobEvent = iota
+
+	// Mob was attacked, but no damage was done
+	MobEventAttacked
+
+	// Mob was recently hit
+	MobEventHit
+
+	// Mob's health is below 25%
+	MobEventBadlyHurt
+
+	// Possible future events:
+	// MobEventStunned
+	// MobEventFriendDied
+	// MobEventHurt
+)
+
+type MobState int
+
+const (
+	MobStill MobState = iota
+	MobSentry
+	MobWander
+	MobPatrol
+	MobSeekTarget
+	MobAttack
+	MobFlee
+)
+
+func (st MobState) String() string {
+	switch st {
+	case MobStill:
+		return "still"
+	case MobSentry:
+		return "sentry"
+	case MobWander:
+		return "wander"
+	case MobPatrol:
+		return "patrol"
+	case MobSeekTarget:
+		return "seek_target"
+	case MobAttack:
+		return "attack"
+	case MobFlee:
+		return "flee"
+	default:
+		return fmt.Sprintf("state_%d", int(st))
+	}
+}
+
+// Mob aggression levels
+//
+// Loosely indicates what the mob will do when it encounters another character
+// or mob
+//
+// Passive           - mob is passive and will try to run away if attacked
+// Defends           - mob will not attack unless attacked
+// Attacks           - mob will attack players when they are found
+// Attacks mobs      - mob will attack other mobs that are not of its species/tribe/etc.
+// Attacks only mobs - mob will attack other mobs that are not of its species/tribe/etc.
+//                     but not players, unless attacked
+// Blind rage        - mob will attack anything
+//
+// Aggression is something that can be changed/escalated by the mob's state machine
+//   - Attack can become 'Attacks mobs' if attacked by another mob
+//
+//   - Vicious lemmings start with Aggression='Attacks', but after taking enough damage
+//     this will escalate into Aggression='Blind rage'.
+//
+//   - Lemmings start out as
+//
+type Aggression int
+
+const (
+	AggressionPassive Aggression = iota
+	// consider: AggressionStoic: defends if attacked and damaged (or damaged enough)
+	AggressionDefends
+	AggressionAttacks
+	AggressionAttacksMobs
+	AggressionBlindRage
+)
+
+func (agg Aggression) String() string {
+
+	switch agg {
+	case AggressionPassive:
+		return "passive"
+	case AggressionDefends:
+		return "defends"
+	case AggressionAttacks:
+		return "attacks"
+	case AggressionAttacksMobs:
+		return "attacks_mobs"
+	case AggressionBlindRage:
+		return "blind_rage"
+	default:
+		return fmt.Sprintf("aggression_%d", int(agg))
+	}
+}
+
 type Mob struct {
 	I, J int
 
 	Stats UnitStats
 	Type  MobType
 
-	MoveTick uint16
-	StunTick uint16
+	MoveTick   int16
+	StunTick   int16
+	SeekTick   int16
+	AttackTick int16
 
 	ActionTick [4]uint16
 
-	Direc  Direction
-	States [5]int16
+	Direc Direction
+
+	Weapon Item
+
+	Event      MobEvent
+	EventCause Unit
+
+	State    MobState
+	StateArg int // helper state for state machine controlling behavior
+
+	Aggression  Aggression
+	Target      Unit
+	LastTargetI int
+	LastTargetJ int
 }
 
-func (m *Mob) TakeDamage(dmg int) {
+var _ Unit = &Mob{}
+
+func (m *Mob) TakeDamage(dmg int, u Unit) {
 	hp := m.Stats.HP - dmg
 	if hp < 0 {
 		hp = 0
@@ -262,6 +421,14 @@ func (m *Mob) TakeDamage(dmg int) {
 	}
 
 	m.Stats.HP = hp
+
+	if hp < m.Stats.MaxHP/4 {
+		m.Event = MobEventBadlyHurt
+		m.EventCause = u
+	} else {
+		m.Event = MobEventHit
+		m.EventCause = u
+	}
 }
 
 func (m *Mob) IsAlive() bool {
@@ -328,14 +495,16 @@ type Player struct {
 
 	Stats UnitStats
 
-	BusyTick   uint16
-	HealthTick uint16
+	BusyTick   int16
+	HealthTick int16
 
-	SwingRate   uint16
-	SwingTick   uint16
-	SwingState  uint16
+	SwingRate   int16
+	SwingTick   int16
+	SwingState  int16
 	SwingFacing Direction
 }
+
+var _ Unit = &Player{}
 
 func (p *Player) GetStats() *UnitStats {
 	return &p.Stats
@@ -345,7 +514,7 @@ func (p *Player) IsAlive() bool {
 	return p.Stats.HP > 0
 }
 
-func (p *Player) TakeDamage(dmg int) {
+func (p *Player) TakeDamage(dmg int, u Unit) {
 	hp := p.Stats.HP - dmg
 	if hp <= 0 {
 		hp = 0
@@ -429,17 +598,37 @@ func (g *Game) RUnlock() {
 	g.mu.RUnlock()
 }
 
-func (g *Game) hasCollision(newI, newJ int) Namer {
+func RollDirection(d Dice) Direction {
+	switch d.Roll1dN(4) {
+	case 1:
+		return Up
+	case 2:
+		return Left
+	case 3:
+		return Down
+	case 4:
+		return Right
+
+	default:
+		return NoDirection
+	}
+}
+
+func (g *Game) hasCollision(newI, newJ int) (Namer, bool) {
 	lvl := g.Level
 
+	if newI < 0 || newJ < 0 || newI >= lvl.H || newJ >= lvl.W {
+		return nil, true
+	}
+
 	if what := lvl.Get(newI, newJ); what != MarkerEmpty {
-		return what
+		return what, true
 	}
 
 	// TODO: better collision detect for players/mobs
 	for _, pl := range g.Markers {
 		if newI == pl.I && newJ == pl.J {
-			return pl
+			return pl, true
 		}
 	}
 
@@ -448,11 +637,11 @@ func (g *Game) hasCollision(newI, newJ int) Namer {
 		m := &mobs[i]
 
 		if newI == m.I && newJ == m.J {
-			return m
+			return m, true
 		}
 	}
 
-	return nil
+	return nil, false
 }
 
 const GameLogNumLines = 100
@@ -474,6 +663,7 @@ func NewGame(l *Level) (*Game, error) {
 		GameLog: chat.NewLog(GameLogNumLines),
 
 		// cooldowns: make(map[*Session][]uint64),
+		// actions: make(map[Session]action),
 
 		Level:   l, // NewBoxLevel(LevelWidth, LevelHeight),
 		Players: make(map[string]*Player),
@@ -655,6 +845,7 @@ func (g *Game) UserAction(s Session, actType ActionType, arg int16) error {
 	}
 
 	g.handleAction(Action{pl, actType, arg})
+	// g.pendingActions = append(g.pendingActions, Action{pl, actType, arg})
 
 	return nil
 }
@@ -700,16 +891,22 @@ func (g *Game) handleAction(act Action) {
 		newI := clipCoord(pl.I+di, 0, lvl.H)
 		newJ := clipCoord(pl.J+dj, 0, lvl.W)
 
-		if what := g.hasCollision(newI, newJ); what != nil {
+		if what, hasColl := g.hasCollision(newI, newJ); hasColl {
+			whatName := "border of space and time"
+			if what != nil {
+				whatName = what.Name()
+			}
 
-			g.messagef(chat.Game, "%s tried to move %s but hit a %s", user, dir, what.Name())
-			switch obj := what.(type) {
-			case Marker:
-				if obj == MarkerCactus {
-					pl.TakeDamage(2)
-					g.messagef(chat.Game, "Ouch!  %s takes %d damage from %s", user, 2, what.Name())
+			g.messagef(chat.Game, "%s tried to move %s but hit a %s", user, dir, whatName)
+			if what != nil {
+				switch obj := what.(type) {
+				case Marker:
+					if obj == MarkerCactus {
+						pl.TakeDamage(2, nil)
+						g.messagef(chat.Game, "Ouch!  %s takes %d damage from %s", user, 2, what.Name())
+					}
+				default:
 				}
-			default:
 			}
 		} else {
 			pl.I = newI
@@ -730,6 +927,42 @@ func (g *Game) handleAction(act Action) {
 		}
 	case Defend:
 		g.messagef(chat.Game, "%s is defending", user)
+	}
+}
+
+func (g *Game) meleeAttack(attacker, victim Unit, weaponItem Item) {
+	shortName := weaponItem.ShortName()
+	if !victim.IsAlive() {
+		g.messagef(chat.Game, "%s swings the %s futility at the %s.",
+			attacker.Name(), shortName, victim.Name())
+		return
+	}
+
+	stats := victim.GetStats()
+	toHit := attacker.GetStats().ToHit(stats)
+
+	var dmg int
+	switch w := weaponItem.(type) {
+	case *MeleeWeapon:
+		dmg = w.Damage(victim, g.Dice)
+	case Item:
+		dmg = 1
+	}
+
+	if g.Dice.RollD20() <= toHit {
+		g.messagef(chat.Game, "%s slashes %s with a %s for %d damage", attacker.Name(), victim.Name(), shortName, dmg)
+
+		victim.TakeDamage(dmg, attacker)
+
+		if !victim.IsAlive() {
+			g.messagef(chat.Game, "%s killed %s", attacker.Name(), victim.Name())
+		}
+	} else {
+		if mob, ok := victim.(*Mob); ok {
+			mob.Event = MobEventAttacked
+			mob.EventCause = attacker
+		}
+		g.messagef(chat.Game, "%s swings wildy at %s with a %s but misses", attacker.Name(), victim.Name(), shortName)
 	}
 }
 
@@ -774,37 +1007,15 @@ func (g *Game) playerAttack(pl *Player) {
 	swJ := pl.J + swDJ
 
 	if pl.SwingState > 0 {
-		coll := g.hasCollision(swI, swJ)
+		coll, hasColl := g.hasCollision(swI, swJ)
+		if coll == nil && hasColl {
+			coll = MarkerBorder
+		}
+
 		if coll != nil && pl.SwingTick == 0 {
 			switch victim := coll.(type) {
 			case *Mob:
-				if victim.IsAlive() {
-					stats := victim.GetStats()
-					toHit := pl.GetStats().ToHit(stats)
-
-					var dmg int
-					switch w := weaponItem.(type) {
-					case *MeleeWeapon:
-						dmg = w.Damage(victim, g.Dice)
-					case Item:
-						dmg = 1
-					}
-
-					if g.Dice.RollD20() <= toHit {
-						g.messagef(chat.Game, "%s slashes %s with a %s for %d damage", pl.Name(), coll.Name(), shortName, dmg)
-
-						victim.TakeDamage(dmg)
-
-						if !victim.IsAlive() {
-							g.messagef(chat.Game, "%s killed %s", pl.Name(), coll.Name())
-						}
-					} else {
-						g.messagef(chat.Game, "%s swings wildy at %s with a %s but misses", pl.Name(), coll.Name(), shortName)
-					}
-				} else {
-					g.messagef(chat.Game, "%s swings the %s futility at the %s.",
-						pl.Name(), shortName, coll.Name())
-				}
+				g.meleeAttack(pl, victim, weaponItem)
 
 			case Marker:
 				if w, ok := weaponItem.(*MeleeWeapon); ok && len(w.HitObjectDescription) > 0 {
@@ -838,11 +1049,569 @@ func (g *Game) playerAttack(pl *Player) {
 	}
 }
 
+type AABB struct {
+	I0, J0, I1, J1 int
+}
+
+func (bb *AABB) Width() int {
+	return bb.J1 - bb.J0
+}
+
+func (bb *AABB) Height() int {
+	return bb.I1 - bb.I0
+}
+
+func (bb *AABB) Inside(i, j int) bool {
+	return (i >= bb.I0) && (i < bb.I1) && (j >= bb.J0) && (j < bb.J1)
+}
+
+/*
+func (bb *AABB) Intersect(other *AABB) (AABB, bool) {
+	// check for no overlap
+	if bb.I1 < other.I0 || other.I1 < bb.I0 || bb.J1 < other.J0 || other.J1 < bb.J0 {
+		return AABB{}, false
+	}
+
+	// check for one AABB enclosing the other
+	if bb.I0 <= other.I0 && bb.I1 >= other.I1 && bb.J0 <= other.J0 && bb.J1 >= other.J1 {
+		return *other, true
+	}
+
+	// FIXME: test!
+	i0, j0, i1, j1 := bb.I0, bb.J0, bb.I1, bb.J1
+	if other.I0 > i0 {
+		i0 = other.I0
+	}
+
+	if other.I1 < i1 {
+		i1 = other.I1
+	}
+
+	if other.J0 > j0 {
+		j0 = other.J0
+	}
+
+	if other.J1 < j1 {
+		j1 = other.J1
+	}
+
+	return AABB{I0: i0, J0: j0, I1: i1, J1: j1}, (i0 < i1 && j0 < j1)
+}
+*/
+
+func minInt(a, b int) int {
+	if a <= b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a >= b {
+		return a
+	}
+	return b
+}
+
+func (g *Game) PerceptionArea(mob *Mob) AABB {
+	info := LookupMobInfo(mob.Type)
+
+	i := mob.I
+	j := mob.J
+
+	lvl := g.Level
+
+	// FIXME: this is a simple placeholder perception
+	// approach.  We'll need something better.
+	//
+	// Downsides:
+	//   - expensive: quadratic in the number of mobs+players
+	//   - inaccurate: perceive through walls
+
+	ui, uj, vi, vj := mob.Direc.Vectors()
+
+	var i0, j0, i1, j1 int
+	if ui == 0 && uj == 0 {
+		// MxM square, where M = half view distance (rounded down)
+		viewDist := info.ViewDistance / 2
+		i0 = i - viewDist
+		i1 = i + viewDist
+
+		j0 = j - viewDist
+		j1 = j + viewDist
+	} else {
+		viewDist := info.ViewDistance
+		fov := info.FieldOfView
+
+		ui = ui * viewDist
+		uj = uj * viewDist
+
+		vi = vi * fov
+		vj = vj * fov
+
+		i00 := i + vi
+		j00 := j + vj
+
+		i01 := i - vi
+		j01 := j - vj
+
+		i10 := i00 + ui
+		j10 := j00 + uj
+
+		i11 := i01 + ui
+		j11 := j01 + uj
+
+		i0 = minInt(minInt(i00, i01), minInt(i10, i11))
+		j0 = minInt(minInt(j00, j01), minInt(j10, j11))
+		i1 = maxInt(maxInt(i00, i01), maxInt(i10, i11))
+		j1 = maxInt(maxInt(j00, j01), maxInt(j10, j11))
+	}
+
+	i0 = clipCoord(i0, 0, lvl.H)
+	i1 = clipCoord(i1, 0, lvl.H)
+
+	j0 = clipCoord(j0, 0, lvl.W)
+	j1 = clipCoord(j1, 0, lvl.W)
+
+	return AABB{I0: i0, J0: j0, I1: i1, J1: j1}
+}
+
+// TODO: both collision detection and "visual perception"
+//       will need an overhaul to a better set of data structures
+func (g *Game) detectOthers(mob *Mob) []Unit {
+	// info := LookupMobInfo(mob.Type)
+
+	// i := mob.I
+	// j := mob.J
+
+	// lvl := g.Level
+
+	// FIXME: this is a simple placeholder perception
+	// approach.  We'll need something better.
+	//
+	// Downsides:
+	//   - expensive: quadratic in the number of mobs+players
+	//   - inaccurate: perceive through walls
+
+	seenUnits := []Unit{}
+	pa := g.PerceptionArea(mob)
+	for _, pl := range g.Players {
+		if pa.Inside(pl.I, pl.J) {
+			seenUnits = append(seenUnits, pl)
+		}
+	}
+
+	for i := range g.Mobs {
+		m := &g.Mobs[i]
+		if pa.Inside(m.I, m.J) {
+			seenUnits = append(seenUnits, m)
+		}
+	}
+
+	return seenUnits
+}
+
+func SignAndMagnitude(val int) (sign int, magnitude int) {
+
+	switch {
+	case val > 0:
+		sign = 1
+		magnitude = val
+	case val < 0:
+		sign = -1
+		magnitude = -val
+	case val == 0:
+		sign = 0
+		magnitude = 0
+	}
+
+	return
+}
+
+type MoveRelative int
+
+const (
+	MoveFarther MoveRelative = -1
+	MoveCloser  MoveRelative = 1
+)
+
+// relative == +1 moves closer
+// relative == -1 moves farther
+func (g *Game) mobMoveRelative(mob *Mob, destI, destJ int, moveRel MoveRelative) {
+	di := int(moveRel) * (destI - mob.I)
+	dj := int(moveRel) * (destJ - mob.J)
+
+	vi, absDI := SignAndMagnitude(di)
+	vj, absDJ := SignAndMagnitude(dj)
+
+	lvl := g.Level
+
+	coord := 0
+	if absDI < absDJ {
+		coord = 1
+	}
+
+	for try := 0; try < 2; try++ {
+		i1 := mob.I
+		j1 := mob.J
+		if coord == 0 {
+			mob.Direc = Down
+			if vi < 0 {
+				mob.Direc = Up
+			}
+
+			i1 = clipCoord(mob.I+vi, 0, lvl.H)
+		} else {
+			mob.Direc = Right
+			if vj < 0 {
+				mob.Direc = Left
+			}
+			j1 = clipCoord(mob.J+vj, 0, lvl.W)
+		}
+
+		_, hasColl := g.hasCollision(i1, j1)
+		if !hasColl {
+			mob.I = i1
+			mob.J = j1
+			return
+		}
+
+		coord = 1 - coord
+	}
+}
+
+func (g *Game) mobWander(mob *Mob, wanderRollD20 int) {
+	// pick a direction and wander
+	if g.Dice.RollD20() <= wanderRollD20 {
+		mob.Direc = RollDirection(g.Dice)
+	}
+
+	for i := 0; i < 4; i++ {
+		di, dj, _, _ := mob.Direc.Vectors()
+		i1 := mob.I + di
+		j1 := mob.J + dj
+
+		_, hasColl := g.hasCollision(i1, j1)
+		if !hasColl {
+			mob.I = i1
+			mob.J = j1
+			return
+		}
+
+		mob.Direc = RollDirection(g.Dice)
+	}
+}
+
+func (g *Game) mobUpdate(mob *Mob) {
+	if !mob.IsAlive() {
+		return
+	}
+
+	// Mob updates based on behavior
+	//
+	//   -
+	//
+	//
+
+	mobInfo := LookupMobInfo(mob.Type)
+	seenUnits := g.detectOthers(mob)
+	// TODO: check for interesting objects within line of sight, too
+
+	if mob.Target != nil && !mob.Target.IsAlive() {
+		mob.Target = nil
+	}
+
+	// 1. handle any events that have happened to the mob
+	switch mob.Event {
+	case MobEventAttacked, MobEventHit:
+		if mob.Aggression != AggressionPassive {
+			if mob.EventCause != nil {
+				// TODO: handle multi-unit aggro
+				if mob.Target == nil || mob.State == MobSeekTarget {
+					mob.Target = mob.EventCause
+					ti, tj, _, _ := mob.Target.GetPos()
+					mob.LastTargetI = ti
+					mob.LastTargetJ = tj
+
+					mob.State = MobSeekTarget
+					mob.SeekTick = mobInfo.SeekTargetRate
+					mob.MoveTick = mobInfo.ChaseRate
+				}
+
+				// TODO: add log message
+			}
+		} else if mob.Event == MobEventHit || mob.State != MobSentry {
+			// passive mobs flee if they take damage or aren't sentries
+			if mob.EventCause != nil {
+				mob.Target = mob.EventCause
+				mob.State = MobFlee
+				mob.MoveTick = 1
+
+				ti, tj, _, _ := mob.Target.GetPos()
+				mob.LastTargetI = ti
+				mob.LastTargetJ = tj
+
+				// TODO: add log message
+			}
+		}
+
+	case MobEventBadlyHurt:
+		if mob.Aggression != AggressionBlindRage && mob.EventCause != nil {
+			mob.State = MobFlee
+			mob.MoveTick = 1
+
+			if mob.EventCause != nil {
+				u := mob.EventCause
+				mob.Target = u
+				ti, tj, _, _ := u.GetPos()
+				mob.LastTargetI = ti
+				mob.LastTargetJ = tj
+			} else if mob.Target == nil {
+				mob.LastTargetI = mob.I
+				mob.LastTargetJ = mob.J
+			}
+
+			// TODO: add log message
+		}
+	}
+
+	var targetInSight bool
+	var searchedForTarget bool
+	// targetSqDist := -1
+
+	// 2. handle any state changes based on seenUnits
+	switch mob.Aggression {
+	case AggressionPassive, AggressionDefends:
+		break
+
+	case AggressionAttacks, AggressionAttacksMobs, AggressionBlindRage:
+		// TODO: handle AttacksMobs and BlindRage
+		if mob.Target == nil {
+			mi := mob.I
+			mj := mob.J
+
+			// FIXME: nearest should probably take into account
+			// pathfinding.
+			//
+			// TODO: implement pathfinding...
+
+			// look for the nearest player unit
+			var nearest Unit
+			var nearestSqDist int
+			for _, u := range seenUnits {
+				if pl, ok := u.(*Player); ok {
+					di := pl.I - mi
+					dj := pl.J - mj
+					sqdist := di*di + dj*dj
+					if nearest == nil || sqdist < nearestSqDist {
+						nearest = pl
+						nearestSqDist = sqdist
+					}
+				}
+			}
+
+			if nearest != nil {
+				mob.Target = nearest
+				targetInSight = true
+				searchedForTarget = true
+				mob.State = MobAttack
+				// targetSqDist = nearestSqDist
+			}
+
+			// TODO: add log message
+		}
+	}
+
+	// if mob already has a target, check if the mob can see the target
+	if mob.Target != nil && !searchedForTarget {
+		for _, u := range seenUnits {
+			if u == mob.Target {
+				ti, tj, _, _ := mob.Target.GetPos()
+
+				// di := ti - mob.I
+				// dj := tj - mob.J
+				// targetSqDist = di*di + dj*dj
+				targetInSight = true
+
+				mob.LastTargetI = ti
+				mob.LastTargetJ = tj
+			}
+		}
+	}
+
+	// handle state transitions
+	switch mob.State {
+	case MobStill, MobSentry:
+		break
+
+	case MobPatrol:
+		if mob.Direc == 0 {
+			mob.State = MobWander
+		}
+
+	case MobAttack:
+		// FIXME: this isn't the right transition
+		if !mob.Target.IsAlive() {
+			mob.Target = nil
+		}
+
+		if mob.Target == nil {
+			mob.State = MobWander
+		} else if !targetInSight {
+			mob.State = MobSeekTarget
+			mob.SeekTick = mobInfo.SeekTargetRate
+		}
+
+	case MobSeekTarget:
+		// FIXME: this isn't the right transition
+		if mob.Target == nil || mob.SeekTick == 0 {
+			mob.State = MobWander
+			mob.Target = nil
+			mob.LastTargetI = -1
+			mob.LastTargetJ = -1
+		} else if targetInSight {
+			mob.State = MobAttack
+		}
+
+	case MobFlee:
+		switch mob.Aggression {
+		case AggressionAttacks, AggressionAttacksMobs, AggressionBlindRage:
+			stats := mob.GetStats()
+			if stats.HP > stats.MaxHP/2 {
+				mob.State = MobAttack
+			}
+		}
+	}
+
+	// 3. Actually move, attack, use ability, etc.
+	switch mob.State {
+	case MobStill, MobSentry:
+		break
+
+	case MobWander:
+		if mob.MoveTick--; mob.MoveTick <= 0 {
+			g.mobWander(mob, 7)
+			mob.MoveTick = mobInfo.MoveRate
+		}
+
+	case MobPatrol:
+		if mob.Direc == 0 {
+			break
+		}
+
+		if mob.MoveTick--; mob.MoveTick <= 0 {
+			mob.MoveTick = mobInfo.MoveRate
+
+			di, dj, _, _ := mob.Direc.Vectors()
+
+			i1 := mob.I + di
+			j1 := mob.J + dj
+
+			if _, hasColl := g.hasCollision(i1, j1); hasColl {
+				i1 = mob.I
+				j1 = mob.J
+
+				mob.Direc = mob.Direc.Mirror()
+			}
+
+			mob.I = i1
+			mob.J = j1
+		}
+
+	case MobSeekTarget:
+		mob.SeekTick--
+		if mob.SeekTick > 0 {
+			mob.MoveTick--
+			if mob.MoveTick <= 0 {
+				var di, dj int
+				if mob.LastTargetI >= 0 && mob.LastTargetJ >= 0 {
+					// Move toward last known
+					di = mob.LastTargetI - mob.I
+					dj = mob.LastTargetJ - mob.I
+
+					if di == 0 && dj == 0 {
+						mob.LastTargetI = -1
+						mob.LastTargetJ = -1
+					}
+				}
+
+				if mob.LastTargetI >= 0 && mob.LastTargetJ >= 0 {
+					// FIXME: this approach yields paths that are really
+					// kind of weird.
+					//
+					// FIXME: Use something like Bresenham's algorithm
+					g.mobMoveRelative(mob, mob.LastTargetI, mob.LastTargetJ, MoveCloser)
+				} else {
+					g.mobWander(mob, 14)
+				}
+
+				mob.MoveTick = mobInfo.ChaseRate
+			}
+		}
+
+	case MobAttack:
+		if mob.Target != nil {
+			ti, tj, _, _ := mob.Target.GetPos()
+			di := ti - mob.I
+			dj := tj - mob.J
+			sqDist := di*di + dj*dj
+
+			weaponItem := mob.Weapon
+			if weaponItem == nil {
+				weaponItem = BareHands
+			}
+
+			var attackRate int16 = 12
+			if w, ok := weaponItem.(*MeleeWeapon); ok {
+				attackRate = int16(w.swingTicks)
+			}
+
+			// FIXME: weapon length
+			if sqDist > 1 {
+				mob.AttackTick = attackRate
+				if mob.MoveTick--; mob.MoveTick <= 0 {
+					g.mobMoveRelative(mob, ti, tj, MoveCloser)
+					mob.MoveTick = mobInfo.MoveRate
+				}
+			} else {
+				mob.MoveTick = mobInfo.MoveRate
+				if mob.AttackTick--; mob.AttackTick <= 0 {
+					mob.AttackTick = attackRate
+					g.meleeAttack(mob, mob.Target, mob.Weapon)
+				}
+			}
+		}
+
+	case MobFlee:
+		ti, tj, _, _ := mob.Target.GetPos()
+		di := ti - mob.I
+		dj := tj - mob.J
+		sqDist := di*di + dj*dj
+
+		if sqDist < 50 {
+			if mob.MoveTick--; mob.MoveTick <= 0 {
+				mob.MoveTick = mobInfo.ChaseRate // TODO: add a flee rate
+
+				g.mobMoveRelative(mob, ti, tj, MoveFarther)
+			}
+		}
+	}
+
+	// clear any events handled this tick
+	mob.Event = MobEventNone
+	mob.EventCause = nil
+
+	// Update random information
+	if mob.Target != nil {
+		ti, tj, _, _ := mob.Target.GetPos()
+		mob.LastTargetI = ti
+		mob.LastTargetJ = tj
+	}
+}
+
 func (g *Game) loopInner() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-
-	lvl := g.Level
 
 	/*** Game loop ***/
 
@@ -890,46 +1659,7 @@ func (g *Game) loopInner() {
 	// update mobs
 	for i := range g.Mobs {
 		mob := &g.Mobs[i]
-
-		if mob.Direc == 0 || !mob.IsAlive() {
-			continue
-		}
-
-		mobInfo := LookupMobInfo(mob.Type)
-
-		if mob.MoveTick--; mob.MoveTick <= 0 {
-			mob.MoveTick = mobInfo.MoveTicks
-
-			var di, dj int
-			var mirror Direction = NoDirection
-			switch mob.Direc {
-			case Up:
-				di, dj = -1, 0
-				mirror = Down
-			case Down:
-				di, dj = 1, 0
-				mirror = Up
-			case Left:
-				di, dj = 0, -1
-				mirror = Right
-			case Right:
-				di, dj = 0, 1
-				mirror = Left
-			}
-
-			i1 := clipCoord(mob.I+di, 0, lvl.H)
-			j1 := clipCoord(mob.J+dj, 0, lvl.W)
-
-			if what := g.hasCollision(i1, j1); what != nil {
-				i1 = mob.I
-				j1 = mob.J
-
-				mob.Direc = mirror
-			}
-
-			mob.I = i1
-			mob.J = j1
-		}
+		g.mobUpdate(mob)
 	}
 
 	// update area effects
@@ -988,12 +1718,12 @@ func (g *Game) Command(sess Session, txt string) error {
 	switch {
 	case txt == "/quit":
 		sess.Quit()
-		// sess.App.Stop()
-		return nil
 
 	default:
 		return UnknownCommandError
 	}
+
+	return nil
 }
 
 func (g *Game) Input(l chat.MsgLevel, txt string) error {

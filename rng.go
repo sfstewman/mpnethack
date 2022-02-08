@@ -43,6 +43,10 @@ func (d Dice) RollD20() int {
 	return d.rng.Intn(20) + 1
 }
 
+func (d Dice) Roll1dN(n int) int {
+	return d.rng.Intn(n) + 1
+}
+
 // Rolls M d N
 func (d Dice) Roll(m, n int) int {
 	if n <= 0 || m <= 0 {
@@ -54,10 +58,9 @@ func (d Dice) Roll(m, n int) int {
 		return m
 	}
 
-	acc := 0
-	for i := 0; i < m; i++ {
-		num := d.rng.Intn(n) + 1
-		acc += num
+	acc := d.Roll1dN(n)
+	for i := 1; i < m; i++ {
+		acc += d.Roll1dN(n)
 	}
 
 	return acc
