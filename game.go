@@ -48,111 +48,12 @@ func (act ActionType) String() string {
 	}
 }
 
-type Direction int16
-
-const (
-	NoDirection Direction = iota
-	Left
-	Right
-	Up
-	Down
-)
-
-func (direc Direction) Name() string {
-	switch direc {
-	case NoDirection:
-		return "none"
-	case Left:
-		return "left"
-	case Right:
-		return "right"
-	case Up:
-		return "up"
-	case Down:
-		return "down"
-	}
-
-	return fmt.Sprintf("Direction[%d]", direc)
-}
-
-func (direc Direction) Vectors() (ui, uj, vi, vj int) {
-	switch direc {
-	case Up:
-		ui, uj = -1, 0
-		vi, vj = 0, 1
-	case Down:
-		ui, uj = 1, 0
-		vi, vj = 0, -1
-	case Left:
-		ui, uj = 0, -1
-		vi, vj = -1, 0
-	case Right:
-		ui, uj = 0, 1
-		vi, vj = 1, 0
-	}
-
-	return
-}
-
-func (direc Direction) Mirror() Direction {
-	switch direc {
-	case Up:
-		return Down
-	case Down:
-		return Up
-	case Left:
-		return Right
-	case Right:
-		return Left
-	default:
-		return NoDirection
-	}
-}
-
 var UserActionCooldownTicks = [MaxActionType]uint64{
 	Nothing: 0,
 	Move:    1,
 	Attack:  5,
 	Defend:  150,
 }
-
-type Cooldowns []uint32
-
-var zeroCooldowns = [MaxActionType]uint32{}
-
-func calcCooldowns(now uint64, last []uint64, cd Cooldowns) Cooldowns {
-	if cd == nil {
-		cd = make(Cooldowns, len(last))
-	}
-
-	for i, when := range last {
-		if i >= MaxActionType || when == 0 {
-			cd[i] = 0
-			continue
-		}
-
-		nextTime := when + UserActionCooldownTicks[i]
-		if now >= nextTime {
-			cd[i] = 0
-			continue
-		}
-
-		cd[i] = uint32(nextTime - now)
-	}
-
-	return cd
-}
-
-type Action struct {
-	Player *Player
-	Type   ActionType
-	Arg    int16
-}
-
-const (
-	DefaultPlayerRow  = 3
-	DefaultPlayerCol0 = LevelWidth / 4
-)
 
 type Session interface {
 	IsAdministrator() bool
@@ -197,354 +98,6 @@ type Unit interface {
 
 	TakeDamage(dmg int, u Unit)
 	IsAlive() bool
-}
-
-type MobType uint32
-
-type MobInfo struct {
-	Type MobType
-
-	Name   string
-	Marker rune
-	W, H   int
-
-	MoveRate       int16
-	ChaseRate      int16
-	SeekTargetRate int16
-
-	DefaultWeapon     Item
-	DefaultAggression Aggression
-
-	ViewDistance int
-	FieldOfView  int
-
-	InitialState    MobState
-	InitialStateArg int
-}
-
-const (
-	MobLemming MobType = iota
-	MobViciousLemming
-)
-
-var mobTypes = []MobInfo{
-	MobInfo{
-		Type:              MobLemming,
-		Name:              "Lemming",
-		Marker:            'L',
-		W:                 1,
-		H:                 1,
-		MoveRate:          10,
-		ChaseRate:         8,
-		SeekTargetRate:    300,
-		DefaultWeapon:     LemmingClaws,
-		DefaultAggression: AggressionDefends,
-		ViewDistance:      3,
-		FieldOfView:       3,
-		InitialState:      MobPatrol,
-	},
-	MobInfo{
-		Type:              MobViciousLemming,
-		Name:              "Vicious lemming",
-		Marker:            'V',
-		W:                 1,
-		H:                 1,
-		MoveRate:          5,
-		ChaseRate:         3,
-		SeekTargetRate:    200,
-		DefaultWeapon:     LemmingClaws,
-		DefaultAggression: AggressionAttacks,
-		ViewDistance:      3,
-		FieldOfView:       3,
-		InitialState:      MobPatrol,
-	},
-}
-
-func AddMobType(info MobInfo) MobType {
-	mt := MobType(len(mobTypes))
-
-	info.Type = mt
-	mobTypes = append(mobTypes, info)
-
-	return mt
-}
-
-func LookupMobInfo(mt MobType) *MobInfo {
-	ind := int(mt)
-	if ind >= len(mobTypes) {
-		return nil
-	}
-
-	return &mobTypes[ind]
-}
-
-type MobEvent int
-
-const (
-	// No events have happened to this mob
-	MobEventNone MobEvent = iota
-
-	// Mob was attacked, but no damage was done
-	MobEventAttacked
-
-	// Mob was recently hit
-	MobEventHit
-
-	// Mob's health is below 25%
-	MobEventBadlyHurt
-
-	// Possible future events:
-	// MobEventStunned
-	// MobEventFriendDied
-	// MobEventHurt
-)
-
-type MobState int
-
-const (
-	MobStill MobState = iota
-	MobSentry
-	MobWander
-	MobPatrol
-	MobSeekTarget
-	MobAttack
-	MobFlee
-)
-
-func (st MobState) String() string {
-	switch st {
-	case MobStill:
-		return "still"
-	case MobSentry:
-		return "sentry"
-	case MobWander:
-		return "wander"
-	case MobPatrol:
-		return "patrol"
-	case MobSeekTarget:
-		return "seek_target"
-	case MobAttack:
-		return "attack"
-	case MobFlee:
-		return "flee"
-	default:
-		return fmt.Sprintf("state_%d", int(st))
-	}
-}
-
-// Mob aggression levels
-//
-// Loosely indicates what the mob will do when it encounters another character
-// or mob
-//
-// Passive           - mob is passive and will try to run away if attacked
-// Defends           - mob will not attack unless attacked
-// Attacks           - mob will attack players when they are found
-// Attacks mobs      - mob will attack other mobs that are not of its species/tribe/etc.
-// Attacks only mobs - mob will attack other mobs that are not of its species/tribe/etc.
-//                     but not players, unless attacked
-// Blind rage        - mob will attack anything
-//
-// Aggression is something that can be changed/escalated by the mob's state machine
-//   - Attack can become 'Attacks mobs' if attacked by another mob
-//
-//   - Vicious lemmings start with Aggression='Attacks', but after taking enough damage
-//     this will escalate into Aggression='Blind rage'.
-//
-//   - Lemmings start out as
-//
-type Aggression int
-
-const (
-	AggressionPassive Aggression = iota
-	// consider: AggressionStoic: defends if attacked and damaged (or damaged enough)
-	AggressionDefends
-	AggressionAttacks
-	AggressionAttacksMobs
-	AggressionBlindRage
-)
-
-func (agg Aggression) String() string {
-
-	switch agg {
-	case AggressionPassive:
-		return "passive"
-	case AggressionDefends:
-		return "defends"
-	case AggressionAttacks:
-		return "attacks"
-	case AggressionAttacksMobs:
-		return "attacks_mobs"
-	case AggressionBlindRage:
-		return "blind_rage"
-	default:
-		return fmt.Sprintf("aggression_%d", int(agg))
-	}
-}
-
-type Mob struct {
-	I, J int
-
-	Stats UnitStats
-	Type  MobType
-
-	MoveTick   int16
-	StunTick   int16
-	SeekTick   int16
-	AttackTick int16
-
-	ActionTick [4]uint16
-
-	Direc Direction
-
-	Weapon Item
-
-	Event      MobEvent
-	EventCause Unit
-
-	State    MobState
-	StateArg int // helper state for state machine controlling behavior
-
-	Aggression  Aggression
-	Target      Unit
-	LastTargetI int
-	LastTargetJ int
-}
-
-var _ Unit = &Mob{}
-
-func (m *Mob) TakeDamage(dmg int, u Unit) {
-	hp := m.Stats.HP - dmg
-	if hp < 0 {
-		hp = 0
-		m.Direc = NoDirection
-	}
-
-	m.Stats.HP = hp
-
-	if hp < m.Stats.MaxHP/4 {
-		m.Event = MobEventBadlyHurt
-		m.EventCause = u
-	} else {
-		m.Event = MobEventHit
-		m.EventCause = u
-	}
-}
-
-func (m *Mob) IsAlive() bool {
-	return m.Stats.HP > 0
-}
-
-func (m *Mob) GetStats() *UnitStats {
-	return &m.Stats
-}
-
-func (m *Mob) Name() string {
-	info := LookupMobInfo(m.Type)
-
-	var n string
-	if info != nil {
-		n = info.Name
-	} else {
-		n = "Mob_Unknown"
-	}
-
-	if m.IsAlive() {
-		return n
-	} else {
-		return "dead " + n
-	}
-}
-
-func (m *Mob) GetMarker() rune {
-	info := LookupMobInfo(m.Type)
-	if info == nil {
-		return 0
-	}
-
-	return info.Marker
-}
-
-func (m *Mob) GetPos() (i int, j int, h int, w int) {
-	info := LookupMobInfo(m.Type)
-
-	i = m.I
-	j = m.J
-
-	if info != nil {
-		h = info.H
-		w = info.W
-	} else {
-		h = 1
-		w = 1
-	}
-
-	return
-}
-
-type Player struct {
-	S      Session
-	I, J   int
-	Marker rune
-	Facing Direction
-
-	Inventory []Item
-	Weapon    Item
-
-	Cooldowns []uint64
-
-	Stats UnitStats
-
-	BusyTick   int16
-	HealthTick int16
-
-	SwingRate   int16
-	SwingTick   int16
-	SwingState  int16
-	SwingFacing Direction
-}
-
-var _ Unit = &Player{}
-
-func (p *Player) GetStats() *UnitStats {
-	return &p.Stats
-}
-
-func (p *Player) IsAlive() bool {
-	return p.Stats.HP > 0
-}
-
-func (p *Player) TakeDamage(dmg int, u Unit) {
-	hp := p.Stats.HP - dmg
-	if hp <= 0 {
-		hp = 0
-		p.BusyTick = 0
-		p.HealthTick = 0
-		p.SwingTick = 0
-		p.SwingState = 0
-		p.SwingFacing = NoDirection
-	}
-
-	p.Stats.HP = hp
-	if hp < p.Stats.MaxHP {
-		p.HealthTick = p.Stats.HealthRecoveryRate
-	}
-}
-
-func (p *Player) Name() string {
-	return p.S.UserName()
-}
-
-func (p *Player) GetMarker() rune {
-	return p.Marker
-}
-
-func (p *Player) GetPos() (i int, j int, h int, w int) {
-	i = p.I
-	j = p.J
-	h = 1
-	w = 1
-	return
 }
 
 type EffectType int
@@ -854,18 +407,6 @@ func (g *Game) Move(s Session, direc Direction) error {
 	return g.UserAction(s, Move, int16(direc))
 }
 
-func clipCoord(x, xMin, xMaxPlusOne int) int {
-	if x < xMin {
-		return xMin
-	}
-
-	if x >= xMaxPlusOne {
-		return xMaxPlusOne - 1
-	}
-
-	return x
-}
-
 func (g *Game) handleAction(act Action) {
 	pl := act.Player
 	if pl == nil {
@@ -888,8 +429,8 @@ func (g *Game) handleAction(act Action) {
 		di, dj, _, _ := direc.Vectors()
 		dir := direc.Name()
 
-		newI := clipCoord(pl.I+di, 0, lvl.H)
-		newJ := clipCoord(pl.J+dj, 0, lvl.W)
+		newI := ClipCoord(pl.I+di, 0, lvl.H)
+		newJ := ClipCoord(pl.J+dj, 0, lvl.W)
 
 		if what, hasColl := g.hasCollision(newI, newJ); hasColl {
 			whatName := "border of space and time"
@@ -1049,70 +590,6 @@ func (g *Game) playerAttack(pl *Player) {
 	}
 }
 
-type AABB struct {
-	I0, J0, I1, J1 int
-}
-
-func (bb *AABB) Width() int {
-	return bb.J1 - bb.J0
-}
-
-func (bb *AABB) Height() int {
-	return bb.I1 - bb.I0
-}
-
-func (bb *AABB) Inside(i, j int) bool {
-	return (i >= bb.I0) && (i < bb.I1) && (j >= bb.J0) && (j < bb.J1)
-}
-
-/*
-func (bb *AABB) Intersect(other *AABB) (AABB, bool) {
-	// check for no overlap
-	if bb.I1 < other.I0 || other.I1 < bb.I0 || bb.J1 < other.J0 || other.J1 < bb.J0 {
-		return AABB{}, false
-	}
-
-	// check for one AABB enclosing the other
-	if bb.I0 <= other.I0 && bb.I1 >= other.I1 && bb.J0 <= other.J0 && bb.J1 >= other.J1 {
-		return *other, true
-	}
-
-	// FIXME: test!
-	i0, j0, i1, j1 := bb.I0, bb.J0, bb.I1, bb.J1
-	if other.I0 > i0 {
-		i0 = other.I0
-	}
-
-	if other.I1 < i1 {
-		i1 = other.I1
-	}
-
-	if other.J0 > j0 {
-		j0 = other.J0
-	}
-
-	if other.J1 < j1 {
-		j1 = other.J1
-	}
-
-	return AABB{I0: i0, J0: j0, I1: i1, J1: j1}, (i0 < i1 && j0 < j1)
-}
-*/
-
-func minInt(a, b int) int {
-	if a <= b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a, b int) int {
-	if a >= b {
-		return a
-	}
-	return b
-}
-
 func (g *Game) PerceptionArea(mob *Mob) AABB {
 	info := LookupMobInfo(mob.Type)
 
@@ -1161,17 +638,17 @@ func (g *Game) PerceptionArea(mob *Mob) AABB {
 		i11 := i01 + ui
 		j11 := j01 + uj
 
-		i0 = minInt(minInt(i00, i01), minInt(i10, i11))
-		j0 = minInt(minInt(j00, j01), minInt(j10, j11))
-		i1 = maxInt(maxInt(i00, i01), maxInt(i10, i11))
-		j1 = maxInt(maxInt(j00, j01), maxInt(j10, j11))
+		i0 = MinInt(MinInt(i00, i01), MinInt(i10, i11))
+		j0 = MinInt(MinInt(j00, j01), MinInt(j10, j11))
+		i1 = MaxInt(MaxInt(i00, i01), MaxInt(i10, i11))
+		j1 = MaxInt(MaxInt(j00, j01), MaxInt(j10, j11))
 	}
 
-	i0 = clipCoord(i0, 0, lvl.H)
-	i1 = clipCoord(i1, 0, lvl.H)
+	i0 = ClipCoord(i0, 0, lvl.H)
+	i1 = ClipCoord(i1, 0, lvl.H)
 
-	j0 = clipCoord(j0, 0, lvl.W)
-	j1 = clipCoord(j1, 0, lvl.W)
+	j0 = ClipCoord(j0, 0, lvl.W)
+	j1 = ClipCoord(j1, 0, lvl.W)
 
 	return AABB{I0: i0, J0: j0, I1: i1, J1: j1}
 }
@@ -1211,23 +688,6 @@ func (g *Game) detectOthers(mob *Mob) []Unit {
 	return seenUnits
 }
 
-func SignAndMagnitude(val int) (sign int, magnitude int) {
-
-	switch {
-	case val > 0:
-		sign = 1
-		magnitude = val
-	case val < 0:
-		sign = -1
-		magnitude = -val
-	case val == 0:
-		sign = 0
-		magnitude = 0
-	}
-
-	return
-}
-
 type MoveRelative int
 
 const (
@@ -1260,13 +720,13 @@ func (g *Game) mobMoveRelative(mob *Mob, destI, destJ int, moveRel MoveRelative)
 				mob.Direc = Up
 			}
 
-			i1 = clipCoord(mob.I+vi, 0, lvl.H)
+			i1 = ClipCoord(mob.I+vi, 0, lvl.H)
 		} else {
 			mob.Direc = Right
 			if vj < 0 {
 				mob.Direc = Left
 			}
-			j1 = clipCoord(mob.J+vj, 0, lvl.W)
+			j1 = ClipCoord(mob.J+vj, 0, lvl.W)
 		}
 
 		_, hasColl := g.hasCollision(i1, j1)
@@ -1718,6 +1178,17 @@ func (g *Game) Command(sess Session, txt string) error {
 	switch {
 	case txt == "/quit":
 		sess.Quit()
+
+	case txt == "/listmobs":
+		func() {
+			g.Lock()
+			defer g.Unlock()
+
+			for i := range g.Mobs {
+				m := &g.Mobs[i]
+				g.messagef(chat.Info, "[%3d] %+v", i, m)
+			}
+		}()
 
 	default:
 		return UnknownCommandError
