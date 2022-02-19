@@ -559,9 +559,9 @@ func (g *Game) playerAttack(pl *Player) {
 				g.meleeAttack(pl, victim, weaponItem)
 
 			case Marker:
-				if w, ok := weaponItem.(*MeleeWeapon); ok && len(w.HitObjectDescription) > 0 {
+				if w, ok := weaponItem.(*MeleeWeapon); ok && len(w.MissedDescription) > 0 {
 					g.messagef(chat.Game, "%s swings the %s futility at the %s.  %s",
-						pl.Name(), shortName, coll.Name(), w.HitObjectDescription)
+						pl.Name(), shortName, coll.Name(), w.MissedDescription)
 				} else {
 					g.messagef(chat.Game, "%s swings the %s futility at the %s.",
 						pl.Name(), shortName, coll.Name())

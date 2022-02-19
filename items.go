@@ -54,7 +54,7 @@ var _ Item = &BasicItem{}
 type MeleeWeapon struct {
 	BasicItem
 
-	HitObjectDescription string
+	MissedDescription string
 
 	damage      Roll
 	swingArc    int
@@ -91,7 +91,7 @@ var RustySword = &MeleeWeapon{
 		weight:      5,
 	},
 
-	HitObjectDescription: "Thankfully this sword can't get any duller.",
+	MissedDescription: "You missed an almost hit yourself!  Thankfully this sword can't get any duller.",
 
 	damage:      Roll{M: 1, N: 4},
 	swingArc:    1,
@@ -108,7 +108,7 @@ var BareHands = &MeleeWeapon{
 		weight:      0,
 	},
 
-	HitObjectDescription: "Thankfully this sword can't get any duller.",
+	MissedDescription: "Maybe hired goons would have been more reliable?",
 
 	damage:      Roll{M: 1, N: 1},
 	swingArc:    0,
@@ -125,7 +125,7 @@ var LemmingClaws = &MeleeWeapon{
 		weight:      0,
 	},
 
-	HitObjectDescription: "Thankfully this sword can't get any duller.",
+	MissedDescription: "The lemming looks confused, and the claws are still scary.",
 
 	damage:      Roll{M: 1, N: 4},
 	swingArc:    0,
