@@ -3,7 +3,11 @@ package mpnethack
 import (
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 )
 
 type Dice struct {
@@ -69,6 +73,33 @@ func (d Dice) Roll(m, n int) int {
 type Roll struct {
 	M int
 	N int
+}
+
+var ErrInvalidRoll = errors.New("Invalid roll format, expected MdN")
+
+func (r *Roll) UnmarshalText(text []byte) error {
+	s := string(text)
+	fields := strings.Split(s, "d")
+	if len(fields) < 2 {
+		return ErrInvalidRoll
+	}
+
+	var err error
+	r.M, err = strconv.Atoi(fields[0])
+	if err != nil {
+		return ErrInvalidRoll
+	}
+
+	r.N, err = strconv.Atoi(fields[1])
+	if err != nil {
+		return ErrInvalidRoll
+	}
+
+	return nil
+}
+
+func (r *Roll) MarshalText() (text []byte, err error) {
+	return fmt.Sprintf("%dd%d", r.M, r.N), nil
 }
 
 func (r Roll) Roll(d Dice) int {

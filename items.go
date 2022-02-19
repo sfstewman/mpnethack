@@ -1,5 +1,9 @@
 package mpnethack
 
+import (
+	"encoding/json"
+)
+
 type Money struct {
 	Gold   int
 	Silver int
@@ -30,6 +34,35 @@ type BasicItem struct {
 	shortName   string
 	description string
 	weight      int
+}
+
+func (itm *BasicItem) UnmarshalTOML(data interface{}) error {
+	*itm = BasicItem{}
+	return unmarshalHelper(data, map[string]interface{}{
+		"id":          &itm.id,
+		"name":        &itm.name,
+		"short_name":  &itm.shortName,
+		"description": &itm.description,
+		"weight":      &itm.weight,
+	}, ErrorOnUnknownKey)
+}
+
+func (itm *BasicItem) MarshalJSON() ([]byte, error) {
+	out := struct {
+		Id          ItemId `json:"id"`
+		Name        string `json:"name"`
+		ShortName   string `json:"short_name"`
+		Description string `json:"description"`
+		Weight      int    `json:"weight"`
+	}{
+		Id:          itm.id,
+		Name:        itm.name,
+		ShortName:   itm.shortName,
+		Description: itm.description,
+		Weight:      itm.weight,
+	}
+
+	return json.Marshal(&out)
 }
 
 func (itm *BasicItem) Tag() string {
@@ -79,6 +112,21 @@ func (w *MeleeWeapon) Damage(u Unit, d Dice) int {
 
 func (w *MeleeWeapon) SwingStats() (arc int, length int, ticks int) {
 	return w.swingArc, w.swingLength, w.swingTicks
+}
+
+func (w *MeleeWeapon) UnmarshalTOML(data interface{}) error {
+	*w = MeleeWeapon{}
+	if err := w.BasicItem.UnmarshalTOML(data); err != nil {
+		return err
+	}
+
+	return unmarshalHelper(data, map[string]interface{}{
+		"missed_description": &w.MissedDescription,
+		"damage":             &w.damage,
+		"swing_arc":          &w.swingArc,
+		"swing_length":       &w.swingLength,
+		"swing_ticks":        &w.swingTicks,
+	}, ErrorOnUnknownKey)
 }
 
 var _ Item = &MeleeWeapon{}
