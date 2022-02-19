@@ -11,6 +11,8 @@ type ItemId int
 type Item interface {
 	Namer
 
+	Tag() string
+
 	Id() ItemId
 
 	ShortName() string
@@ -23,10 +25,15 @@ type Item interface {
 
 type BasicItem struct {
 	id          ItemId
+	tag         string
 	name        string
 	shortName   string
 	description string
 	weight      int
+}
+
+func (itm *BasicItem) Tag() string {
+	return itm.tag
 }
 
 func (itm *BasicItem) Id() ItemId {
@@ -85,6 +92,7 @@ const (
 var RustySword = &MeleeWeapon{
 	BasicItem: BasicItem{
 		id:          RustySwordId,
+		tag:         "rusty_sword",
 		name:        "rusty sword",
 		shortName:   "rusty sword",
 		description: "An old sword, made with neither skill nor care.  The blade is pitted and rusty, but serves as an awkward club.",
@@ -102,6 +110,7 @@ var RustySword = &MeleeWeapon{
 var BareHands = &MeleeWeapon{
 	BasicItem: BasicItem{
 		id:          BareHandsId,
+		tag:         "bare_hards",
 		name:        "bare hards",
 		shortName:   "bare hands",
 		description: "Your fists.  The only thing that beats the personal touch of hired goons.",
@@ -119,6 +128,7 @@ var BareHands = &MeleeWeapon{
 var LemmingClaws = &MeleeWeapon{
 	BasicItem: BasicItem{
 		id:          LemmingClawsId,
+		tag:         "lemming_claws",
 		name:        "lemming claws",
 		shortName:   "claws",
 		description: "Sharp, scary lemming claws",
