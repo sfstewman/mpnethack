@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	UnknownCommandError  error = errors.New("Unkown command")
-	OnCooldownError      error = errors.New("Action still on cooldown")
-	InvalidCooldownError error = errors.New("Action has no valid cooldown")
+	ErrUnknownCommand  error = errors.New("unknown command")
+	ErrOnCooldown      error = errors.New("action still on cooldown")
+	ErrInvalidCooldown error = errors.New("action has no valid cooldown")
 )
 
 const (
@@ -365,7 +365,7 @@ func (g *Game) GetCooldowns(s Session, cds Cooldowns) Cooldowns {
 
 func (g *Game) UserAction(s Session, actType ActionType, arg int16) error {
 	if int(actType) >= len(UserActionCooldownTicks) {
-		return InvalidCooldownError
+		return ErrInvalidCooldown
 	}
 
 	// k := actionKey{s, act}
@@ -379,7 +379,7 @@ func (g *Game) UserAction(s Session, actType ActionType, arg int16) error {
 	actionCDs := pl.Cooldowns
 
 	if pl.BusyTick > 0 || pl.SwingState > 0 || !pl.IsAlive() {
-		return OnCooldownError
+		return ErrOnCooldown
 	}
 
 	if len(actionCDs) == 0 {
@@ -389,7 +389,7 @@ func (g *Game) UserAction(s Session, actType ActionType, arg int16) error {
 
 	last := actionCDs[actType]
 	if last > 0 && now-last < UserActionCooldownTicks[actType] {
-		return OnCooldownError
+		return ErrOnCooldown
 	}
 
 	if actType != Nothing {
@@ -1191,7 +1191,7 @@ func (g *Game) Command(sess Session, txt string) error {
 		}()
 
 	default:
-		return UnknownCommandError
+		return ErrUnknownCommand
 	}
 
 	return nil
