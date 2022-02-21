@@ -248,7 +248,7 @@ func unmarshalHelper(data interface{}, dest map[string]interface{}, flags Unmars
 	}
 
 	if (flags & ErrorOnMissingKey) != 0 {
-		for k, _ := range dataMap {
+		for k := range dataMap {
 			if _, ok := names[k]; !ok {
 				return ErrMissingKey
 			}
