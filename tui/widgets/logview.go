@@ -104,16 +104,13 @@ func (v *LogView) redrawLog() {
 	count := 0
 	first := true
 	var minSeq, maxSeq uint
-	var minCnt, maxCnt int
 	v.Log.VisitLines(0, func(msg chat.Message) bool {
 		if first || msg.Seq < minSeq {
 			minSeq = msg.Seq
-			minCnt = count
 		}
 
 		if first || maxSeq > msg.Seq {
 			maxSeq = msg.Seq
-			maxCnt = count
 		}
 		count++
 
