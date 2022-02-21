@@ -34,9 +34,11 @@ const (
 )
 
 const (
+	//lint:ignore SA4016 ignore irrelevant static analysis comment in const block
 	MarkerVoid  Marker = Marker(uint32(MarkerSpace)<<24 | 0)
 	MarkerEmpty Marker = Marker(uint32(MarkerSpace)<<24 | 1)
 
+	//lint:ignore SA4016 ignore irrelevant static analysis comment in const block
 	MarkerBorder Marker = Marker(uint32(MarkerBounds)<<24 | 0)
 	MarkerWall   Marker = Marker(uint32(MarkerBounds)<<24 | 1)
 
