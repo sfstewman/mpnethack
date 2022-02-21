@@ -1,4 +1,4 @@
-package mpnethack
+package config
 
 import (
 	"encoding"
@@ -14,11 +14,11 @@ var ErrBadType = errors.New("bad type")
 var ErrMissingKey = errors.New("missing key")
 var ErrOutOfRange = errors.New("value out of range")
 
-type UnmarshalHelperFlags uint
+type Flags uint
 
 const (
-	ErrorOnUnknownKey UnmarshalHelperFlags = 1 << iota
-	ErrorOnMissingKey
+	UnknownKeyIsError Flags = 1 << iota
+	MissingKeyIsError
 )
 
 func toInt(v interface{}) (ival int, err error) {
@@ -176,7 +176,7 @@ func toFloat(v interface{}) (fval float64, err error) {
 	}
 }
 
-func unmarshalHelper(data interface{}, dest map[string]interface{}, flags UnmarshalHelperFlags) error {
+func UnmarshalHelper(data interface{}, dest map[string]interface{}, flags Flags) error {
 	dataMap, ok := data.(map[string]interface{})
 	if !ok {
 		return ErrInvalidTOML
@@ -188,7 +188,7 @@ func unmarshalHelper(data interface{}, dest map[string]interface{}, flags Unmars
 	names := NameSet{}
 	for k, v := range dataMap {
 		destVal, ok := dest[k]
-		if !ok && (flags&ErrorOnUnknownKey) != 0 {
+		if !ok && (flags&UnknownKeyIsError) != 0 {
 			// FIXME: need to provide th key...
 			return ErrUnknownKey
 		}
@@ -247,7 +247,7 @@ func unmarshalHelper(data interface{}, dest map[string]interface{}, flags Unmars
 		names[k] = inSet
 	}
 
-	if (flags & ErrorOnMissingKey) != 0 {
+	if (flags & MissingKeyIsError) != 0 {
 		for k := range dataMap {
 			if _, ok := names[k]; !ok {
 				return ErrMissingKey

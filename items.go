@@ -2,6 +2,8 @@ package mpnethack
 
 import (
 	"encoding/json"
+
+	"github.com/sfstewman/mpnethack/config"
 )
 
 type Money struct {
@@ -38,13 +40,13 @@ type BasicItem struct {
 
 func (itm *BasicItem) UnmarshalTOML(data interface{}) error {
 	*itm = BasicItem{}
-	return unmarshalHelper(data, map[string]interface{}{
+	return config.UnmarshalHelper(data, map[string]interface{}{
 		"id":          &itm.id,
 		"name":        &itm.name,
 		"short_name":  &itm.shortName,
 		"description": &itm.description,
 		"weight":      &itm.weight,
-	}, ErrorOnUnknownKey)
+	}, config.UnknownKeyIsError)
 }
 
 func (itm *BasicItem) MarshalJSON() ([]byte, error) {
@@ -120,13 +122,13 @@ func (w *MeleeWeapon) UnmarshalTOML(data interface{}) error {
 		return err
 	}
 
-	return unmarshalHelper(data, map[string]interface{}{
+	return config.UnmarshalHelper(data, map[string]interface{}{
 		"missed_description": &w.MissedDescription,
 		"damage":             &w.damage,
 		"swing_arc":          &w.swingArc,
 		"swing_length":       &w.swingLength,
 		"swing_ticks":        &w.swingTicks,
-	}, ErrorOnUnknownKey)
+	}, config.UnknownKeyIsError)
 }
 
 var _ Item = &MeleeWeapon{}
