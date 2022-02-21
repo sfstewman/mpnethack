@@ -75,7 +75,7 @@ type Roll struct {
 	N int
 }
 
-var ErrInvalidRoll = errors.New("Invalid roll format, expected MdN")
+var ErrInvalidRoll = errors.New("invalid roll format, expected MdN")
 
 func (r *Roll) UnmarshalText(text []byte) error {
 	s := string(text)
