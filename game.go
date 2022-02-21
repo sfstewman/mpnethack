@@ -1068,6 +1068,8 @@ func (g *Game) mobUpdate(mob *Mob) {
 	}
 }
 
+const DebugFramePrintout = false
+
 func (g *Game) loopInner() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -1127,9 +1129,9 @@ func (g *Game) loopInner() {
 	g.FrameNum++
 
 	// debugging frameno printout
-	if g.FrameNum%64 == 0 {
-		// log.Printf("frame %d", g.FrameNum)
-		// g.messagef(MsgInfo, "frame %d", g.FrameNum)
+	if DebugFramePrintout && g.FrameNum%64 == 0 {
+		log.Printf("frame %d", g.FrameNum)
+		g.messagef(chat.Info, "frame %d", g.FrameNum)
 	}
 }
 
