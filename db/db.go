@@ -34,10 +34,10 @@ func (db *DB) LookupLevel(name string) (*mpnethack.Level, error) {
 	return nil, nil
 }
 
-func (db *DB) LookupItem(name string) (Item, error) {
+func (db *DB) LookupItem(name string) (mpnethack.Item, error) {
 	return nil, nil
 }
 
-func (db *DB) LookupItems(name []string) ([]Item, error) {
+func (db *DB) LookupItems(name []string) ([]mpnethack.Item, error) {
 	return nil, nil
 }
