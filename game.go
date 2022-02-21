@@ -200,13 +200,12 @@ func (g *Game) hasCollision(newI, newJ int) (Namer, bool) {
 const GameLogNumLines = 100
 
 func NewGame(l *Level) (*Game, error) {
-	ctx, cancelFunc := context.WithCancel(context.Background())
-
 	dice, err := NewDice()
 	if err != nil {
 		return nil, err
 	}
 
+	ctx, cancelFunc := context.WithCancel(context.Background())
 	g := &Game{
 		pump: time.NewTicker(GameRefreshInterval),
 		Ctx:  ctx,
