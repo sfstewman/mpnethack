@@ -1,6 +1,7 @@
 package mpnethack
 
 import (
+	"encoding"
 	"errors"
 	"math"
 
@@ -199,9 +200,9 @@ func unmarshalHelper(data interface{}, dest map[string]interface{}, flags Unmars
 				return err
 			}
 
-		case toml.TextUnmarshaler:
+		case encoding.TextUnmarshaler:
 			if s, ok := v.(string); ok {
-				return obj.UnmarshalText(s)
+				return obj.UnmarshalText([]byte(s))
 			} else {
 				return ErrBadType
 			}

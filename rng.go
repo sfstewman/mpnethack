@@ -99,7 +99,7 @@ func (r *Roll) UnmarshalText(text []byte) error {
 }
 
 func (r *Roll) MarshalText() (text []byte, err error) {
-	return fmt.Sprintf("%dd%d", r.M, r.N), nil
+	return []byte(fmt.Sprintf("%dd%d", r.M, r.N)), nil
 }
 
 func (r Roll) Roll(d Dice) int {
