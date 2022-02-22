@@ -55,7 +55,6 @@ func (tty *SshTty) Resize(w int, h int) {
 		return tty.ResizeCallback
 	})()
 
-	log.Printf("RESIZE request w=%d, h=%d, cb=%v", w, h, cb)
 	if cb != nil {
 		cb()
 	}
