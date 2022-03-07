@@ -15,7 +15,7 @@ type MobInfo struct {
 	ChaseRate      int16
 	SeekTargetRate int16
 
-	DefaultWeapon     Item
+	DefaultWeaponTag  string
 	DefaultAggression Aggression
 
 	ViewDistance int
@@ -40,7 +40,7 @@ var mobTypes = []MobInfo{
 		MoveRate:          10,
 		ChaseRate:         8,
 		SeekTargetRate:    300,
-		DefaultWeapon:     LemmingClaws,
+		DefaultWeaponTag:  "lemming_claws", // LemmingClaws,
 		DefaultAggression: AggressionDefends,
 		ViewDistance:      3,
 		FieldOfView:       3,
@@ -55,7 +55,7 @@ var mobTypes = []MobInfo{
 		MoveRate:          5,
 		ChaseRate:         3,
 		SeekTargetRate:    200,
-		DefaultWeapon:     LemmingClaws,
+		DefaultWeaponTag:  "lemming_claws", // LemmingClaws,
 		DefaultAggression: AggressionAttacks,
 		ViewDistance:      3,
 		FieldOfView:       3,

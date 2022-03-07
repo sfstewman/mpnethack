@@ -14,6 +14,10 @@ type Money struct {
 
 type ItemId int
 
+const (
+	NullItemId ItemId = 0
+)
+
 type Item interface {
 	Namer
 
@@ -27,6 +31,8 @@ type Item interface {
 	Weight() int
 	// GeneralValue() Money
 	// Modifiers() StatModifiers
+
+	Register(registrar ItemRegistrar) (ItemId, error)
 }
 
 type BasicItem struct {
@@ -36,6 +42,24 @@ type BasicItem struct {
 	shortName   string
 	description string
 	weight      int
+}
+
+type ItemRegistrar interface {
+	RegisterItem(tag string, item Item) (ItemId, error)
+}
+
+func (itm *BasicItem) Register(registrar ItemRegistrar) (ItemId, error) {
+	if itm.id != NullItemId {
+		return itm.id, nil
+	}
+
+	id, err := registrar.RegisterItem(itm.tag, itm)
+	if err != nil {
+		return NullItemId, err
+	}
+
+	itm.id = id
+	return id, nil
 }
 
 func (itm *BasicItem) UnmarshalTOML(data interface{}) error {
@@ -133,62 +157,5 @@ func (w *MeleeWeapon) UnmarshalTOML(data interface{}) error {
 
 var _ Item = &MeleeWeapon{}
 
-const (
-	RustySwordId ItemId = 1000 + iota // FIXME: just some value
-	BareHandsId
-	LemmingClawsId
-)
-
-var RustySword = &MeleeWeapon{
-	BasicItem: BasicItem{
-		id:          RustySwordId,
-		tag:         "rusty_sword",
-		name:        "rusty sword",
-		shortName:   "rusty sword",
-		description: "An old sword, made with neither skill nor care.  The blade is pitted and rusty, but serves as an awkward club.",
-		weight:      5,
-	},
-
-	MissedDescription: "You missed an almost hit yourself!  Thankfully this sword can't get any duller.",
-
-	damage:      Roll{M: 1, N: 4},
-	swingArc:    1,
-	swingLength: 1,
-	swingTicks:  3,
-}
-
-var BareHands = &MeleeWeapon{
-	BasicItem: BasicItem{
-		id:          BareHandsId,
-		tag:         "bare_hards",
-		name:        "bare hards",
-		shortName:   "bare hands",
-		description: "Your fists.  The only thing that beats the personal touch of hired goons.",
-		weight:      0,
-	},
-
-	MissedDescription: "Maybe hired goons would have been more reliable?",
-
-	damage:      Roll{M: 1, N: 1},
-	swingArc:    0,
-	swingLength: 1,
-	swingTicks:  6,
-}
-
-var LemmingClaws = &MeleeWeapon{
-	BasicItem: BasicItem{
-		id:          LemmingClawsId,
-		tag:         "lemming_claws",
-		name:        "lemming claws",
-		shortName:   "claws",
-		description: "Sharp, scary lemming claws",
-		weight:      0,
-	},
-
-	MissedDescription: "The lemming looks confused, and the claws are still scary.",
-
-	damage:      Roll{M: 1, N: 4},
-	swingArc:    0,
-	swingLength: 1,
-	swingTicks:  12,
-}
+var LookupItem func(tag string) (Item, error)
+var BareHands *MeleeWeapon

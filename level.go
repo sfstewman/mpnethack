@@ -196,6 +196,16 @@ func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc Directi
 		moveRate = info.MoveRate
 	}
 
+	var weapon Item
+	if info.DefaultWeaponTag == "" {
+		weapon = BareHands
+	} else {
+		weapon, err = LookupItem(info.DefaultWeaponTag)
+		if err != nil {
+			return fmt.Errorf("error looking up weapon tag \"%s\": %w", info.DefaultWeaponTag, err)
+		}
+	}
+
 	m := Mob{
 		I:          i,
 		J:          j,
@@ -203,7 +213,7 @@ func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc Directi
 		Type:       mobType,
 		MoveTick:   moveRate,
 		Direc:      direc,
-		Weapon:     info.DefaultWeapon,
+		Weapon:     weapon,
 		State:      state,
 		Aggression: info.DefaultAggression,
 	}

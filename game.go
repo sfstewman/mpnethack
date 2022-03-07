@@ -292,13 +292,18 @@ func (g *Game) PlayerJoin(sess Session) (*Player, error) {
 		return nil, err
 	}
 
+	rustySword, err := LookupItem("rusty_sword")
+	if err != nil {
+		return nil, fmt.Errorf("could not find rusty_sword: %w", err)
+	}
+
 	pl := &Player{
 		I:         g.Level.PlayerI0, // i0,
 		J:         g.Level.PlayerJ0, // j0,
 		Marker:    marker,
 		S:         sess,
 		Facing:    Up,
-		Weapon:    RustySword,
+		Weapon:    rustySword,
 		Inventory: []Item{},
 		Stats: UnitStats{
 			ArmorClass:         10,
