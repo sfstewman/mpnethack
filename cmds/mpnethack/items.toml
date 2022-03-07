@@ -1,49 +1,57 @@
 [[items]]
-tag = rusty_carrot_peeler
+tag = "rusty_carrot_peeler"
 name = "Ye olde rusty carrot peeler"
 short_name = "Rusty carrot peeler"
 description = "It used to peel carrots, but the edge has rusted off.  Maybe you can bludgeon the carrots instead?"
 weight = 5
 
 [[items]]
-tag = sharpened_carrot_peeler
-name = "Ye olde sharpened carrot peeler"
-short_name = "Sharpened carrot peeler"
+tag         = "sharpened_carrot_peeler"
+name        = "Ye olde sharpened carrot peeler"
+short_name  = "Sharpened carrot peeler"
 description = "Industrial strength carrot peeler.  Watch out!  That sucker is sharp!"
 weight = 5
 
+[[items]]
+tag         = "dead_lemming_claws"
+short_name  = "withered claws"
+name        = "the withered claws of a dead lemming" 
+description = "The withered claw cut from a poor dead lemming.  Some say they can bring you luck, like a rabbit's foot, if a rabbits foot had sharp talons encrusted in grime."
+weight      = 1
+
+
 [[weapons]]
-tag =         "bare_hards"
-name =        "bare hards"
-short_name =   "bare hands"
-description = "Your fists.  The only thing that beats the personal touch of hired goons."
-weight =      0
+tag                = "bare_hards"
+name               = "bare hards"
+short_name         = "bare hands"
+description        = "Your fists.  The only thing that beats the personal touch of hired goons."
+weight             = 0
 missed_description = "Maybe hired goons would have been more reliable?"
-damage =      1d1
-swing_arc =    0
-swing_length = 1
-swing_ticks =  6
+damage             = "1d1"
+swing_arc          = 0
+swing_length       = 1
+swing_ticks        = 6
 
 [[weapons]]
-tag = "rust_sword"
-name = "rusty sword"
-short_name = "rusty sword"
-description = "An old sword, made with neither skill nor care.  The blade is pitted and rusty, but serves as an awkward club."
-weight = 5
-missed_description = "You missed an almost hit yourself!  Thankfully this sword can't get any duller."
-damage = 1d4
-swing_arc = 1
-swing_length = 1
-swing_ticks = 3
+tag                = "rusty_sword"
+name               = "rusty sword"
+short_name         = "rusty sword"
+description        = "An old sword, made with neither skill nor care.  The blade is pitted and rusty, but serves as an awkward club."
+weight             = 5
+missed_description = "You missed and almost hit yourself!  Thankfully this sword can't get any duller."
+damage             = "1d4"
+swing_arc          = 1
+swing_length       = 1
+swing_ticks        = 3
 
 [[weapons]]
-tag =         "lemming_claws"
-name =        "lemming claws"
-shortName =   "claws"
-description = "Sharp, scary lemming claws"
-weight = 0
+tag                = "lemming_claws"
+name               = "lemming claws"
+short_name         = "claws"
+description        = "Sharp, scary lemming claws"
+weight             = 0
 missed_description = "The lemming looks confused, and the claws are still scary."
-damage = 1d4
-swing_arc = 0
-swing_length = 1
-swing_ticks = 12
+damage             = "1d4"
+swing_arc          = 0
+swing_length       = 1
+swing_ticks        = 12
