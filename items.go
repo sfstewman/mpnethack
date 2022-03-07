@@ -41,12 +41,12 @@ type BasicItem struct {
 func (itm *BasicItem) UnmarshalTOML(data interface{}) error {
 	*itm = BasicItem{}
 	return config.UnmarshalHelper(data, map[string]interface{}{
-		"id":          &itm.id,
+		"tag":         &itm.tag,
 		"name":        &itm.name,
 		"short_name":  &itm.shortName,
 		"description": &itm.description,
 		"weight":      &itm.weight,
-	}, config.UnknownKeyIsError)
+	}, config.NoFlags)
 }
 
 func (itm *BasicItem) MarshalJSON() ([]byte, error) {
@@ -128,7 +128,7 @@ func (w *MeleeWeapon) UnmarshalTOML(data interface{}) error {
 		"swing_arc":          &w.swingArc,
 		"swing_length":       &w.swingLength,
 		"swing_ticks":        &w.swingTicks,
-	}, config.UnknownKeyIsError)
+	}, config.NoFlags)
 }
 
 var _ Item = &MeleeWeapon{}

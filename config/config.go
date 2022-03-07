@@ -19,6 +19,8 @@ type Flags uint
 const (
 	UnknownKeyIsError Flags = 1 << iota
 	MissingKeyIsError
+
+	NoFlags Flags = 0
 )
 
 func toInt(v interface{}) (ival int, err error) {
@@ -202,7 +204,9 @@ func UnmarshalHelper(data interface{}, dest map[string]interface{}, flags Flags)
 
 		case encoding.TextUnmarshaler:
 			if s, ok := v.(string); ok {
-				return obj.UnmarshalText([]byte(s))
+				if err := obj.UnmarshalText([]byte(s)); err != nil {
+					return err
+				}
 			} else {
 				return ErrBadType
 			}
@@ -214,12 +218,89 @@ func UnmarshalHelper(data interface{}, dest map[string]interface{}, flags Flags)
 			}
 			*obj = ival
 
+		case *int64:
+			ival, err := toInt(v)
+			if err != nil {
+				return ErrBadType
+			}
+			if ival < math.MinInt64 || ival > math.MaxInt64 {
+				return ErrOutOfRange
+			}
+			*obj = int64(ival)
+
+		case *int32:
+			ival, err := toInt(v)
+			if err != nil {
+				return ErrBadType
+			}
+			if ival < math.MinInt32 || ival > math.MaxInt32 {
+				return ErrOutOfRange
+			}
+			*obj = int32(ival)
+
+		case *int16:
+			ival, err := toInt(v)
+			if err != nil {
+				return ErrBadType
+			}
+			if ival < math.MinInt16 || ival > math.MaxInt16 {
+				return ErrOutOfRange
+			}
+			*obj = int16(ival)
+
+		case *int8:
+			ival, err := toInt(v)
+			if err != nil {
+				return ErrBadType
+			}
+			if ival < math.MinInt8 || ival > math.MaxInt8 {
+				return ErrOutOfRange
+			}
+			*obj = int8(ival)
+
 		case *uint:
 			uval, err := toUint(v)
 			if err != nil {
 				return ErrBadType
 			}
 			*obj = uval
+
+		case *uint64:
+			uval, err := toUint(v)
+			if err != nil {
+				return ErrBadType
+			}
+			*obj = uint64(uval)
+
+		case *uint32:
+			uval, err := toUint(v)
+			if err != nil {
+				return ErrBadType
+			}
+			if uval > math.MaxUint32 {
+				return ErrOutOfRange
+			}
+			*obj = uint32(uval)
+
+		case *uint16:
+			uval, err := toUint(v)
+			if err != nil {
+				return ErrBadType
+			}
+			if uval > math.MaxUint16 {
+				return ErrOutOfRange
+			}
+			*obj = uint16(uval)
+
+		case *uint8:
+			uval, err := toUint(v)
+			if err != nil {
+				return ErrBadType
+			}
+			if uval > math.MaxUint8 {
+				return ErrOutOfRange
+			}
+			*obj = uint8(uval)
 
 		case *float32:
 			fval, err := toFloat(v)
