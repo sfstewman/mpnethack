@@ -177,7 +177,7 @@ func (m *MapArea) Draw(screen tcell.Screen) {
 		x := x0 + mob.J + deltaJ
 		y := y0 + mob.I + deltaI
 
-		mobInfo := mpnethack.LookupMobInfo(mob.Type)
+		mobInfo, _ := mpnethack.LookupMobInfo(mob.Type)
 		ch := mobInfo.Marker
 		if ch == 0 {
 			ch = '@'

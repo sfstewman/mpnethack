@@ -142,9 +142,11 @@ func (s *Session) ConsoleInput(txt string) {
 	}
 }
 
+var ErrNoGame = errors.New("game is nil")
+
 func (s *Session) Join(g *mpnethack.Game) error {
 	if s.G != nil {
-		return fmt.Errorf("game is nil")
+		return ErrNoGame
 	}
 
 	s.G = g

@@ -185,8 +185,11 @@ func SingleRoomLevel(height, width, roomHeight, roomWidth int) *Level {
 	return lvl
 }
 
-func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc Direction, state MobState, args ...int16) {
-	info := LookupMobInfo(mobType)
+func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc Direction, state MobState, args ...int16) error {
+	info, err := LookupMobInfo(mobType)
+	if err != nil {
+		return fmt.Errorf("error looking up mob info: %w", err)
+	}
 
 	var moveRate int16
 	if info != nil {
@@ -206,4 +209,6 @@ func (l *Level) AddMob(mobType MobType, stats UnitStats, i, j int, direc Directi
 	}
 
 	l.Mobs = append(l.Mobs, m)
+
+	return nil
 }

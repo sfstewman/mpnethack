@@ -72,13 +72,13 @@ func AddMobType(info MobInfo) MobType {
 	return mt
 }
 
-func LookupMobInfo(mt MobType) *MobInfo {
+func LookupMobInfo(mt MobType) (*MobInfo, error) {
 	ind := int(mt)
 	if ind >= len(mobTypes) {
-		return nil
+		return nil, fmt.Errorf("invalid mob type %v", mt)
 	}
 
-	return &mobTypes[ind]
+	return &mobTypes[ind], nil
 }
 
 type MobEvent int
@@ -243,7 +243,7 @@ func (m *Mob) GetStats() *UnitStats {
 }
 
 func (m *Mob) Name() string {
-	info := LookupMobInfo(m.Type)
+	info, _ := LookupMobInfo(m.Type)
 
 	var n string
 	if info != nil {
@@ -260,7 +260,7 @@ func (m *Mob) Name() string {
 }
 
 func (m *Mob) GetMarker() rune {
-	info := LookupMobInfo(m.Type)
+	info, _ := LookupMobInfo(m.Type)
 	if info == nil {
 		return 0
 	}
@@ -269,7 +269,7 @@ func (m *Mob) GetMarker() rune {
 }
 
 func (m *Mob) GetPos() (i int, j int, h int, w int) {
-	info := LookupMobInfo(m.Type)
+	info, _ := LookupMobInfo(m.Type)
 
 	i = m.I
 	j = m.J

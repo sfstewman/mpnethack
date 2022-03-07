@@ -589,8 +589,12 @@ func (g *Game) playerAttack(pl *Player) {
 	}
 }
 
-func (g *Game) PerceptionArea(mob *Mob) AABB {
-	info := LookupMobInfo(mob.Type)
+func (g *Game) PerceptionArea(mob *Mob) (AABB, error) {
+	info, err := LookupMobInfo(mob.Type)
+	if err != nil {
+		log.Printf("error looking up mob info for mob \"%s\" [type %v]: %v", mob.Name, mob.Type, err)
+		return AABB{}, err
+	}
 
 	i := mob.I
 	j := mob.J
@@ -649,7 +653,7 @@ func (g *Game) PerceptionArea(mob *Mob) AABB {
 	j0 = ClipCoord(j0, 0, lvl.W)
 	j1 = ClipCoord(j1, 0, lvl.W)
 
-	return AABB{I0: i0, J0: j0, I1: i1, J1: j1}
+	return AABB{I0: i0, J0: j0, I1: i1, J1: j1}, nil
 }
 
 // TODO: both collision detection and "visual perception"
@@ -670,7 +674,11 @@ func (g *Game) detectOthers(mob *Mob) []Unit {
 	//   - inaccurate: perceive through walls
 
 	seenUnits := []Unit{}
-	pa := g.PerceptionArea(mob)
+	pa, err := g.PerceptionArea(mob)
+	if err != nil {
+		return seenUnits
+	}
+
 	for _, pl := range g.Players {
 		if pa.Inside(pl.I, pl.J) {
 			seenUnits = append(seenUnits, pl)
@@ -772,7 +780,12 @@ func (g *Game) mobUpdate(mob *Mob) {
 	//
 	//
 
-	mobInfo := LookupMobInfo(mob.Type)
+	mobInfo, err := LookupMobInfo(mob.Type)
+	if err != nil {
+		log.Printf("error looking up mob info for mob \"%s\" [type %v]: %v", mob.Name, mob.Type, err)
+		return
+	}
+
 	seenUnits := g.detectOthers(mob)
 	// TODO: check for interesting objects within line of sight, too
 
