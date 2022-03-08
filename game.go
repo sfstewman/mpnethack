@@ -597,7 +597,7 @@ func (g *Game) playerAttack(pl *Player) {
 func (g *Game) PerceptionArea(mob *Mob) (AABB, error) {
 	info, err := LookupMobInfo(mob.Type)
 	if err != nil {
-		log.Printf("error looking up mob info for mob \"%s\" [type %v]: %v", mob.Name, mob.Type, err)
+		log.Printf("error looking up mob info for mob \"%s\" [type %v]: %v", info.Name, mob.Type, err)
 		return AABB{}, err
 	}
 
@@ -787,7 +787,7 @@ func (g *Game) mobUpdate(mob *Mob) {
 
 	mobInfo, err := LookupMobInfo(mob.Type)
 	if err != nil {
-		log.Printf("error looking up mob info for mob \"%s\" [type %v]: %v", mob.Name, mob.Type, err)
+		log.Printf("error looking up mob info for mob \"%s\" [type %v]: %v", mobInfo.Name, mob.Type, err)
 		return
 	}
 
