@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"io"
 	"log"
 
@@ -15,9 +16,8 @@ func LoadItems(db *DB, r io.Reader) error {
 	}
 
 	dec := toml.NewDecoder(r)
-	_, err := dec.Decode(&configItems)
-	if err != nil {
-		return err
+	if _, err := dec.Decode(&configItems); err != nil {
+		return fmt.Errorf("error decoding items: %w", err)
 	}
 
 	for i := range configItems.Items {
