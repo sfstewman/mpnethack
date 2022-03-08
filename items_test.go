@@ -3,6 +3,8 @@ package mpnethack
 import (
 	"strings"
 	"testing"
+
+	"github.com/BurntSushi/toml"
 )
 
 func TestUnmarshalItemFromTOML(t *testing.T) {
@@ -23,37 +25,42 @@ description = "Industrial strength carrot peeler.  Watch out!  That sucker is sh
 weight = 5
 `)
 
-	cfg, err := LoadItems(sr)
-	if err != nil {
+	var loaded struct {
+		Items []BasicItem `toml:"items"`
+	}
+
+	dec := toml.NewDecoder(sr)
+	if _, err := dec.Decode(&loaded); err != nil {
 		t.Errorf("error loading items: %v", err)
 		return
 	}
 
-	if len(cfg.Items) != 2 || len(cfg.MeleeWeapons) != 0 {
-		t.Errorf("expected 2 items and 0 weapons, but found %d items and %d weapons", len(cfg.Items), len(cfg.MeleeWeapons))
+	expected := []BasicItem{
+		{
+			tag:         "rusty_carrot_peeler",
+			name:        "Ye olde rusty carrot peeler",
+			shortName:   "Rusty carrot peeler",
+			description: "It used to peel carrots, but the edge has rusted off.  Maybe you can bludgeon the carrots instead?",
+			weight:      5,
+		},
+		{
+			tag:         "sharpened_carrot_peeler",
+			name:        "Ye olde sharpened carrot peeler",
+			shortName:   "Sharpened carrot peeler",
+			description: "Industrial strength carrot peeler.  Watch out!  That sucker is sharp!",
+			weight:      5,
+		},
+	}
+
+	if len(loaded.Items) != len(expected) {
+		t.Errorf("expected %d items, but found %d items", len(expected), len(loaded.Items))
 		return
 	}
 
-	expected0 := BasicItem{
-		tag:         "rusty_carrot_peeler",
-		name:        "Ye olde rusty carrot peeler",
-		shortName:   "Rusty carrot peeler",
-		description: "It used to peel carrots, but the edge has rusted off.  Maybe you can bludgeon the carrots instead?",
-		weight:      5,
-	}
-	if cfg.Items[0] != expected0 {
-		t.Errorf("expected %+v but found %+v", expected0, cfg.Items[0])
-	}
-
-	expected1 := BasicItem{
-		tag:         "sharpened_carrot_peeler",
-		name:        "Ye olde sharpened carrot peeler",
-		shortName:   "Sharpened carrot peeler",
-		description: "Industrial strength carrot peeler.  Watch out!  That sucker is sharp!",
-		weight:      5,
-	}
-	if cfg.Items[1] != expected1 {
-		t.Errorf("expected %+v but found %+v", expected1, cfg.Items[1])
+	for i := range loaded.Items {
+		if loaded.Items[i] != expected[i] {
+			t.Errorf("item %d: expected %+v but found %+v", i, expected[i], loaded.Items[i])
+		}
 	}
 }
 
@@ -85,18 +92,17 @@ swing_ticks = 2
 
 `)
 
-	cfg, err := LoadItems(sr)
-	if err != nil {
+	var loaded struct {
+		Weapons []MeleeWeapon `toml:"weapons"`
+	}
+
+	dec := toml.NewDecoder(sr)
+	if _, err := dec.Decode(&loaded); err != nil {
 		t.Errorf("error loading items: %v", err)
 		return
 	}
 
-	if len(cfg.Items) != 0 || len(cfg.MeleeWeapons) != 2 {
-		t.Errorf("expected 0 items and 2 weapons, but found %d items and %d weapons", len(cfg.Items), len(cfg.MeleeWeapons))
-		return
-	}
-
-	expectedWeapons := []MeleeWeapon{
+	expected := []MeleeWeapon{
 		{
 			BasicItem: BasicItem{
 				tag:         "rust_sword",
@@ -127,11 +133,14 @@ swing_ticks = 2
 		},
 	}
 
-	if cfg.MeleeWeapons[0] != expectedWeapons[0] {
-		t.Errorf("expected %+v but found %+v", expectedWeapons[0], cfg.MeleeWeapons[0])
+	if len(loaded.Weapons) != len(expected) {
+		t.Errorf("expected %d weapons, but found %d weapons", len(expected), len(loaded.Weapons))
+		return
 	}
 
-	if cfg.MeleeWeapons[1] != expectedWeapons[1] {
-		t.Errorf("expected %+v but found %+v", expectedWeapons[1], cfg.MeleeWeapons[1])
+	for i := range loaded.Weapons {
+		if loaded.Weapons[i] != expected[i] {
+			t.Errorf("weapon %d: expected %+v but found %+v", i, expected[i], loaded.Weapons[i])
+		}
 	}
 }
