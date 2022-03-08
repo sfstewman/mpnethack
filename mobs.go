@@ -1,11 +1,18 @@
 package mpnethack
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/sfstewman/mpnethack/config"
+)
 
 type MobType uint32
 
 type MobInfo struct {
 	Type MobType
+	Tag  string
 
 	Name   string
 	Marker rune
@@ -81,6 +88,41 @@ func LookupMobInfo(mt MobType) (*MobInfo, error) {
 	return &mobTypes[ind], nil
 }
 
+func (mi *MobInfo) UnmarshalTOML(data interface{}) error {
+	*mi = MobInfo{}
+	var marker string
+
+	err := config.UnmarshalHelper(data, map[string]interface{}{
+		"tag":              &mi.Tag,
+		"name":             &mi.Name,
+		"marker":           &marker,
+		"width":            &mi.W,
+		"height":           &mi.H,
+		"move_rate":        &mi.MoveRate,
+		"chase_rate":       &mi.ChaseRate,
+		"seek_target_rate": &mi.SeekTargetRate,
+		"weapon":           &mi.DefaultWeaponTag,
+		"aggression":       &mi.DefaultAggression,
+		"view_distance":    &mi.ViewDistance,
+		"field_of_view":    &mi.FieldOfView,
+		"state":            &mi.InitialState,
+		"state_arg":        &mi.InitialStateArg,
+	}, config.NoFlags)
+
+	if err != nil {
+		return err
+	}
+
+	runes := []rune(marker)
+	if len(runes) != 1 {
+		return fmt.Errorf("expected marker string to have one rune, but found \"%s\" (%d runes)", marker, len(runes))
+	}
+
+	mi.Marker = runes[0]
+
+	return nil
+}
+
 type MobEvent int
 
 const (
@@ -135,6 +177,41 @@ func (st MobState) String() string {
 	}
 }
 
+func (st *MobState) UnmarshalText(text []byte) error {
+	s := string(text)
+
+	switch s {
+	case "still":
+		*st = MobStill
+	case "sentry":
+		*st = MobSentry
+	case "wander":
+		*st = MobWander
+	case "patrol":
+		*st = MobPatrol
+	case "seek_target":
+		*st = MobSeekTarget
+	case "attack":
+		*st = MobAttack
+	case "flee":
+		*st = MobFlee
+	default:
+		const prefix = "state_"
+		if strings.HasPrefix(s, prefix) {
+			suffix := s[len(prefix):]
+			i, err := strconv.Atoi(suffix)
+			if err != nil {
+				*st = MobState(i)
+				return nil
+			}
+		}
+
+		return fmt.Errorf("invalid mob state \"%s\"", s)
+	}
+
+	return nil
+}
+
 // Mob aggression levels
 //
 // Loosely indicates what the mob will do when it encounters another character
@@ -183,6 +260,26 @@ func (agg Aggression) String() string {
 	default:
 		return fmt.Sprintf("aggression_%d", int(agg))
 	}
+}
+
+func (agg *Aggression) UnmarshalText(text []byte) error {
+	s := string(text)
+	switch s {
+	case "passive":
+		*agg = AggressionPassive
+	case "defends":
+		*agg = AggressionDefends
+	case "attacks":
+		*agg = AggressionAttacks
+	case "attacks_mobs":
+		*agg = AggressionAttacksMobs
+	case "blind_rage":
+		*agg = AggressionBlindRage
+	default:
+		return fmt.Errorf("unknown aggression \"%s\"", s)
+	}
+
+	return nil
 }
 
 type Mob struct {
